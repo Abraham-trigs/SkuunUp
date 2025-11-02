@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
 import AddStudentModal from "./components/AddStudentModal.tsx";
-import { useUserStore } from "@/app/store/userStore";
+import { useUserStore } from "@/app/store/useUserStore.ts";
 import { useStudentStore, StudentDetail } from "@/app/store/useStudentStore";
 
 export default function StudentsPage() {

@@ -1,25 +1,32 @@
 // app/staff/components/EditStaffModal.tsx
-// Purpose: Edit modal — pre-fills form with provided staff, validates input, updates via Zustand store, and closes safely.
+// Purpose: Edit existing staff with controlled password toggle, auto-department inference, proper name/email updates, and class dropdown.
 
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useStaffStore, Staff } from "@/app/store/useStaffStore";
+import {
+  positionRoleMap,
+  roleToDepartment,
+  inferRoleFromPosition,
+  requiresClass,
+} from "@/lib/api/constants/roleInference";
+import { FaLock, FaUnlock } from "react-icons/fa";
+import { toast } from "sonner";
 
 interface EditStaffModalProps {
   isOpen: boolean;
   onClose: () => void;
-  staff: Staff; // required — page ensures staff is present before mount
+  staff: Staff;
 }
 
-// Inline Zod schema exactly as requested
 const staffSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email"),
-  password: z.string().min(6, "Minimum 6 characters").optional(),
+  password: z.string().optional(),
   position: z.string().min(1, "Position is required"),
   department: z.string().optional(),
   salary: z.coerce.number().optional(),
@@ -27,85 +34,93 @@ const staffSchema = z.object({
   classId: z.string().optional().nullable(),
 });
 
-type StaffFormData = z.infer<typeof staffSchema>;
+type StaffFormValues = z.infer<typeof staffSchema>;
 
-export default function EditStaffModal({ isOpen, onClose, staff }: EditStaffModalProps) {
-  const { updateStaff } = useStaffStore();
+export default function EditStaffModal({
+  isOpen,
+  onClose,
+  staff,
+}: EditStaffModalProps) {
+  const { updateStaff, classList } = useStaffStore();
+  const [isPasswordEditable, setIsPasswordEditable] = useState(false);
 
   const {
     register,
     handleSubmit,
+    watch,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<StaffFormData>({
+  } = useForm<StaffFormValues>({
     resolver: zodResolver(staffSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: undefined,
-      position: "",
-      department: "",
-      salary: undefined,
-      subject: "",
-      classId: undefined,
-    },
   });
 
-  // Pre-fill when component mounts or staff changes.
-  // This runs only while modal is mounted; page ensures staff exists before mounting.
+  const position = watch("position");
+
   useEffect(() => {
     if (!staff) return;
     reset({
       name: staff.user?.name ?? "",
       email: staff.user?.email ?? "",
-      password: undefined, // blank by default — backend should ignore empty
+      password: undefined,
       position: staff.position ?? "",
-      department: staff.department ?? "",
+      department: roleToDepartment[inferRoleFromPosition(staff.position)] ?? "",
       salary: staff.salary ?? undefined,
       subject: staff.subject ?? "",
       classId: staff.class?.id ?? null,
     });
+    setIsPasswordEditable(false);
   }, [staff, reset]);
 
-  // Submission: uses updateStaff (store handles optimistic update / caching)
-  const onSubmit = async (data: StaffFormData) => {
+  // auto infer department
+  useEffect(() => {
+    if (!position) return;
+    const inferred = roleToDepartment[inferRoleFromPosition(position)];
+    reset((prev) => ({ ...prev, department: inferred }));
+  }, [position, reset]);
+
+  const onSubmit = async (data: StaffFormValues) => {
     try {
-      // normalize values to backend shape if needed
-      const payload = {
-        // do not send empty password to backend if user didn't fill — keep backend rule simple
-        ...(data.password ? { password: data.password } : {}),
-        position: data.position,
-        department: data.department ?? null,
-        salary: data.salary ?? null,
-        subject: data.subject ?? null,
-        classId: data.classId ?? null,
-        // name/email are nested on user; we pass them as top level and let updateStaff normalize,
-        // but updateStaff in store should accept the merged shape or we can pass a full object.
+      const role = inferRoleFromPosition(data.position);
+
+      const userData: Record<string, any> = {
         name: data.name,
         email: data.email,
-      } as any;
+        role,
+      };
+      if (isPasswordEditable && data.password) {
+        userData.password = data.password;
+      }
 
-      await updateStaff(staff.id, payload as Partial<Staff>);
+      const staffData = {
+        position: data.position,
+        department: data.department || roleToDepartment[role],
+        classId: data.classId ?? null,
+        salary: data.salary ?? null,
+        subject: data.subject ?? null,
+      };
+
+      await updateStaff(staff.id, { user: userData, staff: staffData });
+
+      toast.success("Staff updated successfully");
       onClose();
-    } catch (err) {
-      console.error("EditStaffModal:onSubmit error", err);
-      // keep modal open — store or API errors should be surfaced to the user via store.error or future toast
+    } catch (err: any) {
+      console.error("Update failed", err);
+      toast.error("Failed to update staff");
     }
   };
 
+  const requiresClassField = requiresClass(position);
+  const positions = Object.keys(positionRoleMap);
+
   if (!isOpen) return null;
 
-  // Basic modal UI (self-contained; avoid external UI lib)
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       role="dialog"
       aria-modal="true"
     >
-      {/* Overlay */}
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-
-      {/* Panel */}
       <div
         className="relative bg-white rounded-lg shadow-lg w-full max-w-md mx-4 p-6 z-10"
         onClick={(e) => e.stopPropagation()}
@@ -113,94 +128,131 @@ export default function EditStaffModal({ isOpen, onClose, staff }: EditStaffModa
         <h3 className="text-lg font-semibold mb-3">Edit Staff</h3>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+          {/* Name */}
           <div>
             <label className="block text-sm font-medium mb-1">Full name</label>
             <input
               {...register("name")}
               className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400"
-              aria-invalid={!!errors.name}
             />
-            {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>}
+            {errors.name && (
+              <p className="text-red-600 text-sm">{errors.name.message}</p>
+            )}
           </div>
 
+          {/* Email */}
           <div>
             <label className="block text-sm font-medium mb-1">Email</label>
             <input
               {...register("email")}
               type="email"
               className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400"
-              aria-invalid={!!errors.email}
             />
-            {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email.message}</p>}
+            {errors.email && (
+              <p className="text-red-600 text-sm">{errors.email.message}</p>
+            )}
           </div>
 
+          {/* Password */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Password <span className="text-gray-500 text-xs">(leave blank to keep current)</span>
-            </label>
-            <input
-              {...register("password")}
-              type="password"
-              className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400"
-            />
-            {errors.password && <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>}
+            <label className="block text-sm font-medium mb-1">Password</label>
+            <div className="flex gap-2 items-center">
+              <input
+                {...register("password")}
+                type="password"
+                disabled={!isPasswordEditable}
+                placeholder={
+                  isPasswordEditable ? "Enter new password" : "Locked"
+                }
+                className="flex-1 border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
+              />
+              <button
+                type="button"
+                onClick={() => setIsPasswordEditable(!isPasswordEditable)}
+                className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                title={isPasswordEditable ? "Lock password" : "Unlock to edit"}
+              >
+                {isPasswordEditable ? <FaUnlock /> : <FaLock />}
+              </button>
+            </div>
           </div>
 
+          {/* Position */}
           <div>
             <label className="block text-sm font-medium mb-1">Position</label>
-            <input
+            <select
               {...register("position")}
-              className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400"
-              aria-invalid={!!errors.position}
-            />
-            {errors.position && <p className="text-red-600 text-sm mt-1">{errors.position.message}</p>}
+              className="w-full border rounded px-3 py-2"
+            >
+              <option value="">Select role</option>
+              {positions.map((pos) => (
+                <option key={pos} value={pos}>
+                  {pos.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
           </div>
 
+          {/* Department */}
           <div>
             <label className="block text-sm font-medium mb-1">Department</label>
             <input
               {...register("department")}
-              className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400"
+              disabled
+              className="w-full border rounded px-3 py-2 bg-gray-100"
             />
           </div>
 
+          {/* Salary */}
           <div>
             <label className="block text-sm font-medium mb-1">Salary</label>
             <input
               {...register("salary")}
               type="number"
-              className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400"
+              className="w-full border rounded px-3 py-2"
             />
           </div>
 
+          {/* Subject */}
           <div>
             <label className="block text-sm font-medium mb-1">Subject</label>
             <input
               {...register("subject")}
-              className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400"
+              className="w-full border rounded px-3 py-2"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Class ID</label>
-            <input
-              {...register("classId")}
-              className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400"
-            />
-          </div>
+          {/* Class Dropdown */}
+          {requiresClassField && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Class</label>
+              <select
+                {...register("classId")}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="">Select class</option>
+                {classList.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
+          {/* Actions */}
           <div className="flex justify-end gap-2 mt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              className="px-4 py-2 border rounded hover:bg-gray-100"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60"
             >
               {isSubmitting ? "Saving..." : "Save Changes"}
             </button>
@@ -210,24 +262,3 @@ export default function EditStaffModal({ isOpen, onClose, staff }: EditStaffModa
     </div>
   );
 }
-
-
-/* 
-Design reasoning:
-The modal mirrors AddStaffModal’s layout for familiarity but pre-fills data via useEffect for edit context.
-Validation with Zod ensures consistent field rules; password is optional to allow partial edits.
-Button is defined locally for isolation and consistent styling without external imports.
-
-Structure:
-- staffSchema: defines validation and coercion
-- EditStaffModal: main component with controlled form and reset-on-change
-- Button: local helper for consistent action styling
-
-Implementation guidance:
-Call <EditStaffModal isOpen={isEditOpen} onClose={...} staffId={selectedId} /> 
-from StaffPage, triggered by the Edit button in each row or card.
-
-Scalability insight:
-If roles or departments become dynamic, extend schema with z.enum or dynamic selects;
-extract Button to /components/ui/button.tsx later for reuse across modals.
-*/

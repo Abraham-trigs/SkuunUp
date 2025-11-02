@@ -32,15 +32,13 @@ export default function StaffPage() {
   }, [page, search, fetchStaffDebounced]);
 
   const handleEditClick = (staff: Staff) => {
-    // ensure we set staff first, then open modal
-    setSelectedStaff(staff);
-    setIsEditOpen(true);
+    setSelectedStaff(staff); // first set staff
+    setIsEditOpen(true); // then open modal
   };
 
   const closeEdit = () => {
-    // clear selection after closing to avoid stale mount state
     setIsEditOpen(false);
-    setTimeout(() => setSelectedStaff(null), 120); // small timeout to avoid race with animation
+    setTimeout(() => setSelectedStaff(null), 120); // avoid stale mount issues
   };
 
   return (
@@ -86,11 +84,20 @@ export default function StaffPage() {
               </thead>
               <tbody>
                 {staffList.map((staff) => (
-                  <tr key={staff.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={staff.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
                     <td className="border px-3 py-2">{staff.user.name}</td>
-                    <td className="border px-3 py-2 break-words">{staff.user.email}</td>
-                    <td className="border px-3 py-2">{staff.position || "Teacher"}</td>
-                    <td className="border px-3 py-2">{staff.class?.name || "-"}</td>
+                    <td className="border px-3 py-2 break-words">
+                      {staff.user.email}
+                    </td>
+                    <td className="border px-3 py-2">
+                      {staff.position || "Teacher"}
+                    </td>
+                    <td className="border px-3 py-2">
+                      {staff.class?.name || "-"}
+                    </td>
                     <td className="border px-3 py-2 flex gap-2 flex-wrap">
                       <button
                         onClick={() => handleEditClick(staff)}
@@ -114,11 +121,16 @@ export default function StaffPage() {
           {/* Mobile Card List */}
           <div className="md:hidden flex flex-col gap-3">
             {staffList.map((staff) => (
-              <div key={staff.id} className="border rounded p-3 shadow-sm hover:shadow-md transition-shadow bg-white">
+              <div
+                key={staff.id}
+                className="border rounded p-3 shadow-sm hover:shadow-md transition-shadow bg-white"
+              >
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <p className="font-semibold">{staff.user.name}</p>
-                    <p className="text-gray-600 text-sm break-words">{staff.user.email}</p>
+                    <p className="text-gray-600 text-sm break-words">
+                      {staff.user.email}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -137,10 +149,12 @@ export default function StaffPage() {
                 </div>
                 <div className="flex flex-col gap-1 text-sm text-gray-700">
                   <p>
-                    <span className="font-medium">Role:</span> {staff.position || "Teacher"}
+                    <span className="font-medium">Role:</span>{" "}
+                    {staff.position || "Teacher"}
                   </p>
                   <p>
-                    <span className="font-medium">Class:</span> {staff.class?.name || "-"}
+                    <span className="font-medium">Class:</span>{" "}
+                    {staff.class?.name || "-"}
                   </p>
                 </div>
               </div>
@@ -170,15 +184,19 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Edit Modal: mounted only when open AND staff is present (prevents render-time errors) */}
+      {/* Edit Modal */}
       {isEditOpen && selectedStaff && (
-        <EditStaffModal isOpen={isEditOpen} onClose={closeEdit} staff={selectedStaff} />
+        <EditStaffModal
+          isOpen={isEditOpen}
+          onClose={closeEdit}
+          staff={selectedStaff}
+        />
       )}
     </div>
   );
 }
 
-// --- AddStaffModalButton (keeps original behavior) ---
+// --- AddStaffModalButton ---
 function AddStaffModalButton() {
   const [isOpen, setIsOpen] = useState(false);
   return (
