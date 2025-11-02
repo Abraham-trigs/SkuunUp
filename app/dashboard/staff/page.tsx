@@ -1,13 +1,12 @@
 // app/staff/page.tsx
-// Purpose: Responsive Staff Management page with integrated Add and Edit modals, tied to Zustand store.
-// - Shows staff table / mobile cards
-// - Opens Edit modal only when selectedStaff exists (mount-safety to avoid render crashes)
+// Purpose: Responsive Staff Management page with Add/Edit/Delete modals, unified modal contracts.
 
 "use client";
 
 import React, { useEffect, useState } from "react";
 import AddStaffModal from "./components/AddStaffModal";
 import EditStaffModal from "./components/EditStaffModal";
+import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import { useStaffStore, Staff } from "@/app/store/useStaffStore";
 
 export default function StaffPage() {
@@ -20,25 +19,36 @@ export default function StaffPage() {
     setPage,
     setSearch,
     fetchStaffDebounced,
-    deleteStaff,
     totalPages,
   } = useStaffStore();
 
+  // --- Local UI states ---
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedToDelete, setSelectedToDelete] = useState<Staff | null>(null);
 
   useEffect(() => {
     fetchStaffDebounced(page, search);
   }, [page, search, fetchStaffDebounced]);
 
+  // --- Edit Handlers ---
   const handleEditClick = (staff: Staff) => {
-    setSelectedStaff(staff); // first set staff
-    setIsEditOpen(true); // then open modal
+    setSelectedStaff(staff);
+    setIsEditOpen(true);
   };
 
   const closeEdit = () => {
     setIsEditOpen(false);
-    setTimeout(() => setSelectedStaff(null), 120); // avoid stale mount issues
+    setTimeout(() => setSelectedStaff(null), 120);
+  };
+
+  // --- Delete Handlers ---
+  const handleDeleteClick = (staff: Staff) => {
+    setSelectedToDelete(staff);
+  };
+
+  const closeDelete = () => {
+    setSelectedToDelete(null);
   };
 
   return (
@@ -50,7 +60,7 @@ export default function StaffPage() {
       </div>
 
       {/* Search */}
-      <div className="mb-4 flex gap-2 ">
+      <div className="mb-4 flex gap-2">
         <input
           type="text"
           placeholder="Search by name or email"
@@ -106,7 +116,7 @@ export default function StaffPage() {
                         Edit
                       </button>
                       <button
-                        onClick={() => deleteStaff(staff.id)}
+                        onClick={() => handleDeleteClick(staff)}
                         className="text-red-600 hover:underline focus:outline-none focus:ring-2 focus:ring-red-400 px-2 py-1 rounded"
                       >
                         Delete
@@ -140,7 +150,7 @@ export default function StaffPage() {
                       Edit
                     </button>
                     <button
-                      onClick={() => deleteStaff(staff.id)}
+                      onClick={() => handleDeleteClick(staff)}
                       className="text-red-600 hover:underline focus:outline-none focus:ring-2 focus:ring-red-400 px-2 py-1 rounded text-sm"
                     >
                       Delete
@@ -190,6 +200,15 @@ export default function StaffPage() {
           isOpen={isEditOpen}
           onClose={closeEdit}
           staff={selectedStaff}
+        />
+      )}
+
+      {/* Delete Modal */}
+      {selectedToDelete && (
+        <ConfirmDeleteModal
+          isOpen={!!selectedToDelete}
+          staff={selectedToDelete}
+          onClose={closeDelete}
         />
       )}
     </div>
