@@ -63,9 +63,9 @@ export default function StudentsPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 ">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mt-7">
         <h1 className="text-2xl font-semibold">Students</h1>
         <div className="flex gap-2">
           <input

@@ -1,10 +1,12 @@
 // app/layout.tsx
+// Purpose: Global site layout with conditional footer, glass background, and global utilities.
+
 import "./globals.css";
 import { ReactNode } from "react";
 import { Inter } from "next/font/google";
-import { Toaster } from "sonner"; // ✅ import Toaster
+import { Toaster } from "sonner";
 import AppBackground from "./components/AppBackground";
-import SchoolFooter from "./components/home/SchoolFooter";
+import FooterWrapper from "@/app/components/home/FooterWrapper.tsx";
 import BackToTop from "./components/home/BackToTop";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -21,17 +23,22 @@ interface RootLayoutProps {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} h-full text-neutral-dark`}>
-        {/* Background wrapper */}
-        <AppBackground>{children}</AppBackground>
+      <body
+        className={`${inter.className} h-full text-neutral-dark overflow-x-hidden`}
+      >
+        {/* Glass-like translucent background */}
+        <AppBackground>
+          {/* Main content area */}
+          {children}
+        </AppBackground>
 
-        {/* Global footer */}
-        <SchoolFooter />
+        {/* Conditionally rendered footer */}
+        <FooterWrapper />
 
         {/* Scroll helper */}
         <BackToTop />
 
-        {/* 🔔 Toast notifications */}
+        {/* Global notifications */}
         <Toaster position="top-right" richColors closeButton duration={4000} />
       </body>
     </html>

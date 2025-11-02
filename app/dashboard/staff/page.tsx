@@ -42,7 +42,7 @@ export default function StaffPage() {
   };
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-4 md:p-6 mt-7">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2 sm:gap-0">
         <h1 className="text-2xl font-bold">Staff Management</h1>
@@ -50,7 +50,7 @@ export default function StaffPage() {
       </div>
 
       {/* Search */}
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex gap-2 ">
         <input
           type="text"
           placeholder="Search by name or email"

@@ -1,5 +1,5 @@
-// components/Sidebar.tsx
-// Purpose: Role-based sidebar navigation with animations and Zustand integration.
+// app/components/Sidebar.tsx
+// Purpose: Fixed, collapsible sidebar with role-based navigation
 
 "use client";
 
@@ -17,8 +17,8 @@ import {
   FileText,
   Archive,
 } from "lucide-react";
-import { useSidebarStore } from "@/app/store/useSidebarStore.ts";
-import { useUserStore } from "@/app/store/useUserStore.ts";
+import { useSidebarStore } from "@/app/store/useSidebarStore";
+import { useUserStore } from "@/app/store/useUserStore";
 
 export type Role = "ADMIN" | "TEACHER" | "STUDENT" | "PARENT";
 
@@ -40,14 +40,7 @@ const rolePermissions: Record<Role, string[]> = {
   PARENT: ["dashboard", "children"],
 };
 
-interface MenuItem {
-  label: string;
-  icon: any;
-  key: string;
-  href: string;
-}
-
-const menuItems: MenuItem[] = [
+const menuItems = [
   { label: "Dashboard", icon: Home, key: "dashboard", href: "/dashboard" },
   { label: "Classes", icon: Book, key: "classes", href: "/dashboard/classes" },
   {
@@ -94,8 +87,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen, toggle } = useSidebarStore();
   const { user } = useUserStore();
-
   const role: Role = (user?.role as Role) || "ADMIN";
+
   const allowedItems = menuItems.filter((item) =>
     rolePermissions[role].includes(item.key)
   );
@@ -105,11 +98,15 @@ export default function Sidebar() {
       initial={{ width: 64 }}
       animate={{ width: isOpen ? 256 : 64 }}
       transition={{ type: "spring", stiffness: 250, damping: 25 }}
-      className="bg-ford-primary text-white h-full flex flex-col"
+      className="fixed top-0 left-0 bottom-0 z-40
+                 bg-ford-primary text-white flex flex-col
+                 border-r border-ford-secondary"
     >
-      {/* Header */}
+      {/* Sidebar header */}
       <div className="flex items-center justify-between py-4 px-3 border-b border-ford-secondary">
-        {isOpen && <span className="text-xl font-bold">Ford School</span>}
+        {isOpen && (
+          <span className="text-xl font-bold truncate">Ford School</span>
+        )}
         <button
           onClick={toggle}
           className="text-white p-1 hover:bg-ford-secondary rounded-md"
@@ -119,8 +116,8 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Menu */}
-      <nav className="mt-6 flex-1 flex flex-col gap-2 relative">
+      {/* Scrollable nav */}
+      <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-1">
         {allowedItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           return (
@@ -128,30 +125,30 @@ export default function Sidebar() {
               key={item.key}
               href={item.href}
               className={clsx(
-                "group relative flex items-center gap-4 px-4 py-2 rounded transition-colors",
+                "group flex items-center gap-4 px-3 py-2 rounded transition-colors",
                 isActive
                   ? "bg-ford-secondary font-semibold"
                   : "hover:bg-ford-secondary",
                 !isOpen && "justify-center"
               )}
+              title={!isOpen ? item.label : undefined}
             >
               <item.icon className="w-5 h-5" />
               {isOpen && <span>{item.label}</span>}
-              {!isOpen && (
-                <span className="absolute left-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity bg-ford-secondary text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap">
-                  {item.label}
-                </span>
-              )}
             </Link>
           );
         })}
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-ford-secondary">
-        {isOpen && (
+      <div className="p-3 border-t border-ford-secondary flex items-center justify-center bg-ford-primary">
+        {isOpen ? (
           <span className="text-sm text-white/70">
             © {new Date().getFullYear()} Ford School
+          </span>
+        ) : (
+          <span className="text-xs text-white/70">
+            {user?.role?.[0] || "U"}
           </span>
         )}
       </div>

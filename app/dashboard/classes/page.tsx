@@ -63,7 +63,7 @@ export default function ClassesPage() {
   const totalPages = Math.ceil(total / perPage);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 mt-7">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <h1 className="text-2xl font-bold">Classes</h1>
