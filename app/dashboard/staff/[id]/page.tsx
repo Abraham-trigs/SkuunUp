@@ -1,5 +1,5 @@
 // app/staff/[id]/page.tsx
-// Purpose: Individual staff profile page using Zustand store. Supports edit, delete, modals, and redirect after deletion.
+// Purpose: Staff detail page with edit/delete functionality, ensuring redirect after deletion with manual back navigation option.
 
 "use client";
 
@@ -11,9 +11,8 @@ import EditStaffModal from "../components/EditStaffModal";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 
 export default function StaffDetailPage() {
-  const params = useParams();
+  const { id } = useParams();
   const router = useRouter();
-  const id = params.id as string;
 
   const {
     selectedStaff,
@@ -26,10 +25,11 @@ export default function StaffDetailPage() {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // track deletion in progress
 
   // --- Fetch staff if not in store ---
   useEffect(() => {
-    if (id) fetchStaffById(id);
+    if (id) fetchStaffById(id as string);
   }, [id, fetchStaffById]);
 
   // --- Modal Handlers ---
@@ -39,11 +39,13 @@ export default function StaffDetailPage() {
   const closeDelete = () => setIsDeleteOpen(false);
 
   // --- Delete with redirect ---
-  const handleDeleteConfirmed = () => {
+  const handleDeleteConfirmed = async () => {
     if (!selectedStaff) return;
-    deleteStaff(selectedStaff.id, () => {
-      router.push("/dashboard/staff");
+    setIsDeleting(true);
+    await deleteStaff(selectedStaff.id, () => {
+      router.replace("/dashboard/staff"); // redirect after deletion
     });
+    setIsDeleting(false);
     closeDelete();
   };
 
@@ -66,10 +68,19 @@ export default function StaffDetailPage() {
       </div>
     );
 
-  if (!selectedStaff)
+  // Show message if staff removed or not found, but allow manual back
+  if (!selectedStaff && !loading && !isDeleting)
     return (
-      <div className="p-6 text-center text-gray-500">
-        Staff not found or may have been removed.
+      <div className="p-6 text-center space-y-4">
+        <p className="text-gray-500">
+          Staff not found or may have been removed.
+        </p>
+        <button
+          onClick={() => router.push("/dashboard/staff")}
+          className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 focus:outline-none"
+        >
+          Back to Staff List
+        </button>
       </div>
     );
 
@@ -82,7 +93,6 @@ export default function StaffDetailPage() {
         <button
           onClick={() => router.push("/dashboard/staff")}
           className="flex items-center gap-2 text-blue-600 hover:underline focus:outline-none"
-          aria-label="Go back to staff list"
         >
           <ArrowLeft size={18} /> Back to all staff
         </button>
@@ -104,73 +114,67 @@ export default function StaffDetailPage() {
       </header>
 
       {/* --- Profile Summary --- */}
-      <section
-        className="bg-white shadow-sm rounded-2xl p-5 space-y-3 border border-gray-200"
-        aria-labelledby="staff-profile"
-      >
-        <h2 id="staff-profile" className="text-lg font-semibold border-b pb-2">
-          Staff Profile
-        </h2>
-        <div className="grid sm:grid-cols-2 gap-y-2 text-gray-700">
-          <p>
-            <span className="font-medium">Name:</span> {staff.user.name}
-          </p>
-          <p>
-            <span className="font-medium">Email:</span> {staff.user.email}
-          </p>
-          <p>
-            <span className="font-medium">Position:</span>{" "}
-            {staff.position || "Teacher"}
-          </p>
-          <p>
-            <span className="font-medium">Phone:</span>{" "}
-            {staff.user.phone || "—"}
-          </p>
-        </div>
-      </section>
+      {staff && (
+        <>
+          <section
+            className="bg-white shadow-sm rounded-2xl p-5 space-y-3 border border-gray-200"
+            aria-labelledby="staff-profile"
+          >
+            <h2
+              id="staff-profile"
+              className="text-lg font-semibold border-b pb-2"
+            >
+              Staff Profile
+            </h2>
+            <div className="grid sm:grid-cols-2 gap-y-2 text-gray-700">
+              <p>
+                <span className="font-medium">Name:</span> {staff.user.name}
+              </p>
+              <p>
+                <span className="font-medium">Email:</span> {staff.user.email}
+              </p>
+              <p>
+                <span className="font-medium">Position:</span>{" "}
+                {staff.position || "Teacher"}
+              </p>
+              <p>
+                <span className="font-medium">Phone:</span>{" "}
+                {staff.user.phone || "—"}
+              </p>
+            </div>
+          </section>
 
-      {/* --- Assigned Class --- */}
-      <section
-        className="bg-white shadow-sm rounded-2xl p-5 space-y-3 border border-gray-200"
-        aria-labelledby="assigned-class"
-      >
-        <h2 id="assigned-class" className="text-lg font-semibold border-b pb-2">
-          Assigned Class
-        </h2>
-        {staff.class ? (
-          <div className="text-gray-700">
-            <p>
-              <span className="font-medium">Class Name:</span>{" "}
-              {staff.class.name}
-            </p>
-            <p>
-              <span className="font-medium">Students:</span>{" "}
-              {staff.class.students?.length ?? 0}
-            </p>
-          </div>
-        ) : (
-          <p className="text-gray-500">No class assigned yet.</p>
-        )}
-      </section>
-
-      {/* --- Activity Placeholder --- */}
-      <section
-        className="bg-white shadow-sm rounded-2xl p-5 border border-gray-200"
-        aria-labelledby="recent-activity"
-      >
-        <h2
-          id="recent-activity"
-          className="text-lg font-semibold border-b pb-2"
-        >
-          Recent Activity
-        </h2>
-        <p className="text-gray-500 text-sm">
-          Coming soon — attendance logs, grading summaries, and more.
-        </p>
-      </section>
+          {/* --- Assigned Class --- */}
+          <section
+            className="bg-white shadow-sm rounded-2xl p-5 space-y-3 border border-gray-200"
+            aria-labelledby="assigned-class"
+          >
+            <h2
+              id="assigned-class"
+              className="text-lg font-semibold border-b pb-2"
+            >
+              Assigned Class
+            </h2>
+            {staff.class ? (
+              <div className="text-gray-700">
+                <p>
+                  <span className="font-medium">Class Name:</span>{" "}
+                  {staff.class.name}
+                </p>
+                <p>
+                  <span className="font-medium">Students:</span>{" "}
+                  {staff.class.students?.length ?? 0}
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-500">No class assigned yet.</p>
+            )}
+          </section>
+        </>
+      )}
 
       {/* --- Modals --- */}
-      {isEditOpen && (
+      {isEditOpen && staff && (
         <EditStaffModal
           isOpen={isEditOpen}
           onClose={closeEdit}
@@ -178,7 +182,7 @@ export default function StaffDetailPage() {
           onUpdate={handleUpdate} // optimistic UI update
         />
       )}
-      {isDeleteOpen && (
+      {isDeleteOpen && staff && (
         <ConfirmDeleteModal
           isOpen={isDeleteOpen}
           staff={staff}
