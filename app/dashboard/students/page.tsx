@@ -53,7 +53,7 @@ export default function StudentsPage() {
 
   // Navigate to student detail page
   const handleRowClick = (student: StudentDetail) => {
-    router.push(`/dashboard/students/${student.studentId}`);
+    router.push(`/dashboard/students/${student.id}`); // use student.id, not studentId
   };
 
   // Toggle sorting for table headers

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { useStudentStore, StudentDetail } from "@/app/store/useStudentStore";
 import { useClassesStore } from "@/app/store/useClassesStore";
 import { toast } from "sonner";
-import ConfirmDeleteModal from "@/app/dashboard/staff/components/ConfirmDeleteModal.tsx"; // ✅ Import reusable modal
+import ConfirmDeleteModal from "@/app/dashboard/students/components/ConfirmDeleteModal.tsx"; // ✅ Import reusable modal
 
 interface EditStudentModalProps {
   isOpen: boolean;
@@ -255,8 +255,9 @@ export default function EditStudentModal({
       {showDeleteModal && (
         <ConfirmDeleteModal
           isOpen={showDeleteModal}
-          staff={student as any} // Temporarily cast as staff-like for modal reuse
+          student={student}
           onClose={handleDeleteClose}
+          onConfirm={handleDeleteConfirm}
         />
       )}
     </>
