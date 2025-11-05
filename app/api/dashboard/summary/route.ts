@@ -1,57 +1,93 @@
-// app/api/summary/route.ts
-// Provides summary counts for students, parents, classes, and staff per role
+// app/api/exams/route.ts
+// Handles fetching and creating exams with validation, pagination, and search
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { Role } from "@prisma/client";
-import { positionRoleMap } from "@/lib/api/constants/roleInference.ts";
+import { z } from "zod";
+import { cookieUser } from "@/lib/cookieUser.ts";
 
-// Response types
-interface StaffCount {
-  [role: string]: number;
-}
+// Zod schema for creating exams
+const ExamCreateSchema = z.object({
+  studentId: z.string().cuid(),
+  subjectId: z.string().cuid(),
+  score: z.preprocess((val) => parseFloat(val as string), z.number()),
+  maxScore: z.preprocess((val) => parseFloat(val as string), z.number()),
+  date: z.preprocess((val) => (val ? new Date(val as string) : undefined), z.date().optional()),
+});
 
-interface SummaryResponse {
-  students: number;
-  parents: number;
-  classes: number;
-  staff: StaffCount;
-}
+/**
+ * Design reasoning:
+ * - Combines GET and POST for exams in a single route.
+ * - GET supports search, student filter, pagination.
+ * - POST validates and normalizes input before creation.
+ */
 
-// GET /api/summary
+/**
+ * Structure:
+ * - GET: fetch exams with search/pagination
+ * - POST: create new exam
+ */
+
 export async function GET(req: NextRequest) {
   try {
-    // Dynamic staff roles from roleInference
-    const staffRoles = Object.values(positionRoleMap).filter(
-      role => ![Role.STUDENT, Role.PARENT].includes(role)
-    );
+    await cookieUser(req);
 
-    // Build array of count queries for all roles + students, parents, classes
-    const countQueries = [
-      prisma.user.count({ where: { role: Role.STUDENT } }),
-      prisma.user.count({ where: { role: Role.PARENT } }),
-      prisma.class.count(),
-      ...staffRoles.map(role => prisma.user.count({ where: { role } })),
-    ];
+    const url = new URL(req.url);
+    const search = url.searchParams.get("search") || "";
+    const studentId = url.searchParams.get("studentId");
+    const page = Number(url.searchParams.get("page") || 1);
+    const limit = Number(url.searchParams.get("limit") || 20);
+    const skip = (page - 1) * limit;
 
-    // Execute all counts in a single transaction
-    const results = await prisma.$transaction(countQueries);
+    const where: Parameters<typeof prisma.exam.findMany>[0]["where"] = {};
+    if (search) where.subject = { name: { contains: search, mode: "insensitive" } };
+    if (studentId) where.studentId = studentId;
 
-    const students = results[0];
-    const parents = results[1];
-    const classes = results[2];
+    const [exams, total] = await prisma.$transaction([
+      prisma.exam.findMany({
+        where,
+        include: { student: true, subject: true },
+        skip,
+        take: limit,
+        orderBy: { date: "desc" },
+      }),
+      prisma.exam.count({ where }),
+    ]);
 
-    const staffCountsArray = results.slice(3);
-    const staff: StaffCount = {};
-    staffRoles.forEach((role, idx) => {
-      staff[role] = staffCountsArray[idx];
-    });
-
-    const response: SummaryResponse = { students, parents, classes, staff };
-
-    return NextResponse.json(response);
-  } catch (error) {
-    console.error("Summary API error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ data: exams, total });
+  } catch (err: any) {
+    console.error("GET /api/exams error:", err);
+    return NextResponse.json({ error: err.message }, { status: 401 });
   }
 }
+
+export async function POST(req: NextRequest) {
+  try {
+    await cookieUser(req);
+
+    const body = await req.json();
+    const parsed = ExamCreateSchema.parse(body);
+
+    const exam = await prisma.exam.create({
+      data: parsed,
+      include: { student: true, subject: true },
+    });
+
+    return NextResponse.json({ data: exam });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.flatten() }, { status: 400 });
+    }
+    console.error("POST /api/exams error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+/**
+ * Implementation guidance:
+ * - Use GET with optional query params: search, studentId, page, limit.
+ * - POST ensures all numeric fields are coerced to numbers, date is optional.
+ *
+ * Scalability insight:
+ * - Could add batch creation or update endpoints for bulk operations.
+ */

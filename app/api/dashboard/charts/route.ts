@@ -5,13 +5,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 
-// Helper: parse date to YYYY-MM-DD
+// Helper: parse Date to YYYY-MM-DD string
 const formatDate = (date: Date) => date.toISOString().split("T")[0];
 
-// GET /api/charts
+/**
+ * Design reasoning:
+ * Consolidates student counts and attendance trends in a single endpoint.
+ * Uses grouping and mapping to reduce DB calls and format data for charting.
+ * Attendance trend defaults to zero for missing dates to simplify front-end consumption.
+ */
+
+/**
+ * Structure:
+ * - GET: main exported handler.
+ * - formatDate: internal helper for date normalization.
+ */
+
 export async function GET(req: NextRequest) {
   try {
-    // Students per class
+    // Fetch classes with student counts
     const studentsPerClass = await prisma.class.findMany({
       select: {
         id: true,
@@ -38,15 +50,14 @@ export async function GET(req: NextRequest) {
     const classMap = Object.fromEntries(studentsPerClass.map(c => [c.id, c.name]));
 
     // Build trend per class
-    const attendanceTrend: { className: string; data: { date: string; presentCount: number }[] }[] =
-      studentsPerClass.map(c => {
-        const trendData = Array.from({ length: 30 }).map((_, i) => {
-          const date = formatDate(new Date(thirtyDaysAgo.getTime() + i * 24 * 60 * 60 * 1000));
-          const countRecord = attendances.find(a => a.classId === c.id && formatDate(a.date) === date);
-          return { date, presentCount: countRecord?._count ?? 0 };
-        });
-        return { className: c.name, data: trendData };
+    const attendanceTrend = studentsPerClass.map(c => {
+      const trendData = Array.from({ length: 30 }).map((_, i) => {
+        const date = formatDate(new Date(thirtyDaysAgo.getTime() + i * 24 * 60 * 60 * 1000));
+        const countRecord = attendances.find(a => a.classId === c.id && formatDate(a.date) === date);
+        return { date, presentCount: countRecord?._count ?? 0 };
       });
+      return { className: c.name, data: trendData };
+    });
 
     return NextResponse.json({
       studentsPerClass: studentsPerClass.map(c => ({ className: c.name, count: c._count.students })),
@@ -54,6 +65,16 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("Charts API error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+/**
+ * Implementation guidance:
+ * - This endpoint can be consumed by a charting component to render student counts and 30-day attendance trends.
+ * - No front-end filtering is required; data is pre-aggregated.
+ *
+ * Scalability insight:
+ * - For larger datasets, consider pagination for studentsPerClass or caching attendance trends.
+ * - Could be extended to include absent/late statuses without changing structure.
+ */
