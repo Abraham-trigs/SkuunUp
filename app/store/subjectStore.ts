@@ -150,6 +150,7 @@ export const useSubjectStore = create<SubjectStoreState>((set, get) => {
     setFilters: (filters: SubjectFilters) => {
       set({ filters, page: 1 });
       debouncedFetch(1, get().search, filters);
+      
     },
   };
 });

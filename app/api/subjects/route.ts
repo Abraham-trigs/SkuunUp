@@ -1,4 +1,5 @@
-// app/api/subjects/route.ts — List and create Subjects scoped to authenticated user's school.
+// app/api/subjects/route.ts
+// Purpose: List and create Subjects scoped to authenticated user's school, with pagination, search, and creator info.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -44,6 +45,11 @@ export async function GET(req: NextRequest) {
     const [data, total] = await prisma.$transaction([
       prisma.subject.findMany({
         where,
+        include: {
+          createdBy: {
+            select: { id: true, name: true, role: true },
+          },
+        },
         orderBy: { name: "asc" },
         skip: (page - 1) * limit,
         take: limit,
@@ -78,7 +84,14 @@ export async function POST(req: NextRequest) {
     if (exists) return NextResponse.json({ error: "Subject code already exists" }, { status: 409 });
 
     const subject = await prisma.subject.create({
-      data: { ...parsed.data, schoolId: user.schoolId },
+      data: {
+        ...parsed.data,
+        schoolId: user.schoolId,
+        createdById: user.id, // ✅ Track creator
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, role: true } },
+      },
     });
 
     return NextResponse.json(subject, { status: 201 });
@@ -89,11 +102,11 @@ export async function POST(req: NextRequest) {
 }
 
 /* 
-Design reasoning → Matches existing pattern (StudentsPage, Staff API). Unified Zod schema enforces validation consistency and normalization. GET supports pagination, search, and school scoping. POST normalizes and deduplicates codes for safe creation.
+Design reasoning → Adds creator tracking and relational data for the UI table’s “Created By” column. Keeps response lightweight by selecting minimal fields. Schema-driven normalization ensures consistency.
 
-Structure → Exports GET + POST. Helpers: normalizeInput. Uses prisma.$transaction for count + list. Returns { data, meta } to match useSubjectStore.
+Structure → GET (list with pagination, search, include createdBy) + POST (validated creation with createdById assignment). Uses $transaction for atomic listing/counting.
 
-Implementation guidance → Drop in /app/api/subjects/. Store already expects this shape. Ensure prisma model `Subject` has fields: id, name, code, description, schoolId.
+Implementation guidance → Requires `createdById` foreign key on Subject model linking to Staff or User table. Ensure cookieUser returns user.id and schoolId.
 
-Scalability insight → Add filters (e.g., department, level) by extending `where`. Pagination can later move to cursor-based if dataset grows large.
+Scalability insight → Extend `include` to bring related classes or departments without changing response shape. Can paginate or sort by createdBy fields easily.
 */
