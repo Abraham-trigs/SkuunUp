@@ -1,5 +1,5 @@
 // app/staff/[id]/page.tsx
-// Purpose: Staff detail page with edit/delete functionality, ensuring redirect after deletion with manual back navigation option.
+// Purpose: Staff detail page with salary display, edit/delete actions, and redirect handling.
 
 "use client";
 
@@ -25,37 +25,32 @@ export default function StaffDetailPage() {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); // track deletion in progress
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // --- Fetch staff if not in store ---
   useEffect(() => {
     if (id) fetchStaffById(id as string);
   }, [id, fetchStaffById]);
 
-  // --- Modal Handlers ---
   const handleEdit = () => setIsEditOpen(true);
   const handleDelete = () => setIsDeleteOpen(true);
   const closeEdit = () => setIsEditOpen(false);
   const closeDelete = () => setIsDeleteOpen(false);
 
-  // --- Delete with redirect ---
   const handleDeleteConfirmed = async () => {
     if (!selectedStaff) return;
     setIsDeleting(true);
-    await deleteStaff(selectedStaff.id, () => {
-      router.replace("/dashboard/staff"); // redirect after deletion
-    });
+    await deleteStaff(selectedStaff.id, () =>
+      router.replace("/dashboard/staff")
+    );
     setIsDeleting(false);
     closeDelete();
   };
 
-  // --- Update in-place from edit modal ---
   const handleUpdate = (data: Partial<Staff>) => {
     if (!selectedStaff) return;
     updateStaff(selectedStaff.id, data);
   };
 
-  // --- UI States ---
   if (loading && !selectedStaff)
     return (
       <div className="p-6 text-center text-gray-500">Loading staff...</div>
@@ -68,7 +63,6 @@ export default function StaffDetailPage() {
       </div>
     );
 
-  // Show message if staff removed or not found, but allow manual back
   if (!selectedStaff && !loading && !isDeleting)
     return (
       <div className="p-6 text-center space-y-4">
@@ -88,7 +82,6 @@ export default function StaffDetailPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 mt-6">
-      {/* --- Header --- */}
       <header className="flex justify-between items-center flex-wrap gap-3">
         <button
           onClick={() => router.push("/dashboard/staff")}
@@ -113,9 +106,9 @@ export default function StaffDetailPage() {
         </div>
       </header>
 
-      {/* --- Profile Summary --- */}
       {staff && (
         <>
+          {/* --- Staff Profile --- */}
           <section
             className="bg-white shadow-sm rounded-2xl p-5 space-y-3 border border-gray-200"
             aria-labelledby="staff-profile"
@@ -140,6 +133,10 @@ export default function StaffDetailPage() {
               <p>
                 <span className="font-medium">Phone:</span>{" "}
                 {staff.user.phone || "—"}
+              </p>
+              <p>
+                <span className="font-medium">Salary:</span>{" "}
+                {staff.salary ? `₵${staff.salary.toLocaleString()}` : "—"}
               </p>
             </div>
           </section>
@@ -173,13 +170,12 @@ export default function StaffDetailPage() {
         </>
       )}
 
-      {/* --- Modals --- */}
       {isEditOpen && staff && (
         <EditStaffModal
           isOpen={isEditOpen}
           onClose={closeEdit}
           staff={staff}
-          onUpdate={handleUpdate} // optimistic UI update
+          onUpdate={handleUpdate}
         />
       )}
       {isDeleteOpen && staff && (
@@ -187,7 +183,7 @@ export default function StaffDetailPage() {
           isOpen={isDeleteOpen}
           staff={staff}
           onClose={closeDelete}
-          onConfirm={handleDeleteConfirmed} // redirect after delete
+          onConfirm={handleDeleteConfirmed}
         />
       )}
     </div>
