@@ -1,5 +1,5 @@
 // app/subjects/page.tsx
-// Purpose: Manage Subjects with full CRUD, search, filtering, sorting, and paginated table similar to StudentsPage
+// Purpose: Subjects management page with search, sort, pagination, and modals for add/edit/delete, fully integrated with Zustand stores.
 
 "use client";
 
@@ -10,22 +10,25 @@ import { useSubjectStore } from "@/app/store/subjectStore";
 import { useClassesStore } from "@/app/store/useClassesStore";
 import { useStaffStore } from "@/app/store/useStaffStore";
 import AddSubjectModal from "./components/AddsubjectModal.tsx";
-import EditSubjectModal from "./components/EditSubjectModal.tsx";
-import ConfirmDeleteModal from "./components/ConfirmDeleteModal.tsx";
+import EditSubjectModal from "./components/EditSubjectModal";
+import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 
 export default function SubjectsPage() {
   const router = useRouter();
+
+  // ------------------------- Local state -------------------------
   const [localSearch, setLocalSearch] = useState("");
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState<{
+  const [editModal, setEditModal] = useState<{
     open: boolean;
     subjectId?: string;
   }>({ open: false });
-  const [deleteModalOpen, setDeleteModalOpen] = useState<{
+  const [deleteModal, setDeleteModal] = useState<{
     open: boolean;
     subjectId?: string;
   }>({ open: false });
 
+  // ------------------------- Zustand stores -------------------------
   const {
     subjects,
     total,
@@ -47,21 +50,20 @@ export default function SubjectsPage() {
 
   const totalPages = Math.ceil(total / limit);
 
+  // ------------------------- Effects -------------------------
+  // Initial fetch
   useEffect(() => {
     fetchSubjects(page, localSearch);
     fetchClasses();
     fetchStaff();
   }, []);
 
-  // Debounced search
+  // Sync local search to store
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setPage(1);
-      setSearch(localSearch);
-    }, 300);
-    return () => clearTimeout(handler);
+    setSearch(localSearch);
   }, [localSearch]);
 
+  // ------------------------- Handlers -------------------------
   const toggleSort = (key: "name" | "code" | "createdBy") => {
     const order = sortBy === key && sortOrder === "asc" ? "desc" : "asc";
     setSort(key, order);
@@ -69,7 +71,7 @@ export default function SubjectsPage() {
 
   const handleDelete = async (id: string) => {
     await deleteSubject(id);
-    setDeleteModalOpen({ open: false });
+    setDeleteModal({ open: false, subjectId: undefined });
     fetchSubjects(page, localSearch);
   };
 
@@ -77,6 +79,7 @@ export default function SubjectsPage() {
     router.push(`/dashboard/subjects/${subjectId}`);
   };
 
+  // ------------------------- Render -------------------------
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -158,7 +161,7 @@ export default function SubjectsPage() {
                       className="px-2 py-1 rounded bg-blue-500 text-white text-sm hover:bg-blue-600"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditModalOpen({ open: true, subjectId: subject.id });
+                        setEditModal({ open: true, subjectId: subject.id });
                       }}
                     >
                       Edit
@@ -167,10 +170,7 @@ export default function SubjectsPage() {
                       className="px-2 py-1 rounded bg-red-500 text-white text-sm hover:bg-red-600"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDeleteModalOpen({
-                          open: true,
-                          subjectId: subject.id,
-                        });
+                        setDeleteModal({ open: true, subjectId: subject.id });
                       }}
                     >
                       Delete
@@ -215,36 +215,52 @@ export default function SubjectsPage() {
 
       {/* Modals */}
       {addModalOpen && (
-        <AddSubjectModal onClose={() => setAddModalOpen(false)} />
-      )}
-      {editModalOpen.open && editModalOpen.subjectId && (
-        <EditSubjectModal
-          subjectId={editModalOpen.subjectId}
-          onClose={() => setEditModalOpen({ open: false })}
+        <AddSubjectModal
+          onClose={() => setAddModalOpen(false)}
+          onSuccess={() => {
+            setAddModalOpen(false);
+            fetchSubjects(page, localSearch);
+          }}
         />
       )}
-      {deleteModalOpen.open && deleteModalOpen.subjectId && (
+
+      {editModal.open && editModal.subjectId && (
+        <EditSubjectModal
+          subjectId={editModal.subjectId}
+          onClose={() => setEditModal({ open: false, subjectId: undefined })}
+          onSuccess={() => {
+            setEditModal({ open: false, subjectId: undefined });
+            fetchSubjects(page, localSearch);
+          }}
+        />
+      )}
+
+      {deleteModal.open && deleteModal.subjectId && (
         <ConfirmDeleteModal
           title="Delete Subject"
           message="Are you sure?"
-          onConfirm={() => handleDelete(deleteModalOpen.subjectId!)}
-          onClose={() => setDeleteModalOpen({ open: false })}
+          onConfirm={() => handleDelete(deleteModal.subjectId!)}
+          onClose={() => setDeleteModal({ open: false, subjectId: undefined })}
         />
       )}
     </div>
   );
 }
 
-/*
-Design reasoning → Mirrors StudentsPage UX: searchable, sortable, paginated table with loading states and actionable rows. Debounced search prevents excessive fetches. Modals handle full CRUD with optimistic refresh.
+/* Design reasoning:
+- Central page for managing subjects with clear actions for add/edit/delete.
+- Search, sort, and pagination integrated with Zustand for consistent state and minimal re-renders.
+- Modals for CRUD actions ensure UX consistency and avoid page navigation.
 
-Structure →
-- Exports: SubjectsPage component
-- State: search, modals
-- Stores: subjects, classes, staff
-- Methods: fetch, sort, delete, row click, modal open/close
+Structure:
+- Header with search and add button.
+- Table showing subjects with clickable rows and actions.
+- Pagination controls and modals for add/edit/delete.
 
-Implementation guidance → Plug into /dashboard/subjects, ensure useSubjectStore, useClassesStore, useStaffStore provide required methods. Wire modals with onSuccess callbacks to refresh table.
+Implementation guidance:
+- Ensure fetchSubjects, fetchClasses, fetchStaff are called on mount to populate state.
+- Modal callbacks trigger fetchSubjects to refresh data.
 
-Scalability insight → Can add additional filters, advanced table columns, or inline editing without major refactor.
+Scalability insight:
+- Can extend table to include more relational fields (assigned staff/classes) without modifying main layout.
 */

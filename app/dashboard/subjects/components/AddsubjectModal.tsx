@@ -1,11 +1,9 @@
 // app/components/subjects/AddSubjectModal.tsx
-// Purpose: Modal form to create a new Subject, with client-side validation, optimistic UI, and state-managed store integration.
-
-import React, { useState } from "react";
+import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useSubjectStore } from "@/app/store/subjectStore.ts";
+import { useSubjectStore } from "@/app/store/subjectStore";
 
 // ------------------------- Schema -------------------------
 const addSubjectSchema = z.object({
@@ -16,17 +14,16 @@ const addSubjectSchema = z.object({
 type AddSubjectFormData = z.infer<typeof addSubjectSchema>;
 
 interface AddSubjectModalProps {
-  isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 // ------------------------- Modal Component -------------------------
 export default function AddSubjectModal({
-  isOpen,
   onClose,
+  onSuccess,
 }: AddSubjectModalProps) {
   const { createSubject, loading, error } = useSubjectStore();
-  const [success, setSuccess] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, formState } =
     useForm<AddSubjectFormData>({
@@ -34,25 +31,20 @@ export default function AddSubjectModal({
       defaultValues: { name: "", code: "" },
     });
 
-  // ------------------------- Submit handler -------------------------
   const onSubmit = async (data: AddSubjectFormData) => {
     const result = await createSubject(data);
     if (result) {
-      setSuccess("Subject created successfully");
       reset();
+      if (onSuccess) onSuccess(); // ✅ Call onSuccess to close modal & refresh table
     }
   };
 
-  if (!isOpen) return null;
-
-  // ------------------------- Render -------------------------
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg w-full max-w-md">
         <h2 className="text-lg font-semibold mb-4">Add Subject</h2>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Name */}
           <div>
             <label className="block mb-1">Name</label>
             <input
@@ -68,7 +60,6 @@ export default function AddSubjectModal({
             )}
           </div>
 
-          {/* Code */}
           <div>
             <label className="block mb-1">Code</label>
             <input
@@ -79,11 +70,8 @@ export default function AddSubjectModal({
             />
           </div>
 
-          {/* Feedback */}
           {error && <p className="text-red-500">{error}</p>}
-          {success && <p className="text-green-500">{success}</p>}
 
-          {/* Buttons */}
           <div className="flex justify-end space-x-2">
             <button
               type="button"
@@ -106,17 +94,3 @@ export default function AddSubjectModal({
     </div>
   );
 }
-
-/* Design reasoning:
-- Minimal, accessible modal with focus on usability and validation.
-- Optimistic UI feedback via success/error messages improves user experience.
-- Controlled by Zustand store for consistent state management.
-Structure:
-- Uses react-hook-form with Zod for validation.
-- Local state for success feedback; store manages loading/error.
-Implementation guidance:
-- Can be wired to any parent component; open/close controlled via props.
-- Subjects are added immediately via store; handles client-side validation before store call.
-Scalability insight:
-- Supports additional subject fields or meta-data by extending Zod schema and form inputs without changing modal logic.
-*/
