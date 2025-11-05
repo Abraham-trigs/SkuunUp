@@ -1,20 +1,33 @@
+// app/api/auth/refresh/route.ts
+// Purpose: Refresh JWT for authenticated user, keep schoolDomain in payload
+
 import { NextRequest, NextResponse } from "next/server";
-import { verifyJwt, signJwt } from "@/lib/jwt";
+import { signJwt, verifyJwt } from "@/lib/jwt";
 import { COOKIE_NAME, COOKIE_OPTIONS } from "@/lib/cookies";
+import { cookieUser } from "@/lib/cookieUser.ts";
 
 export async function POST(req: NextRequest) {
   try {
-    const token = req.cookies.get(COOKIE_NAME)?.value;
-    if (!token) return NextResponse.json({ message: "No token" }, { status: 401 });
+    const user = await cookieUser();
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-    const payload = verifyJwt(token);
-    const newToken = signJwt(payload);
+    // Re-sign JWT with current payload
+    const newToken = signJwt({
+      id: user.id,
+      role: user.role,
+      schoolDomain: user.schoolDomain,
+    });
 
     const res = NextResponse.json({ message: "Token refreshed" });
     res.cookies.set(COOKIE_NAME, newToken, COOKIE_OPTIONS);
     return res;
-  } catch (error) {
-    console.error("Refresh error:", error);
-    return NextResponse.json({ message: "Invalid token" }, { status: 401 });
+  } catch (err) {
+    console.error("POST /api/auth/refresh error:", err);
+    return NextResponse.json({ error: "Failed to refresh token" }, { status: 500 });
   }
 }
+
+/* Example usage:
+POST /api/auth/refresh
+Sets a new JWT cookie with updated expiration
+*/

@@ -1,5 +1,5 @@
 // stores/useUserStore.ts
-// Purpose: Centralized user state for authenticated session, synced with /api/auth/me.
+// Purpose: Centralized user state for authenticated session, synced with /api/auth/me and login
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -7,39 +7,16 @@ import { persist } from "zustand/middleware";
 interface School {
   id: string;
   name: string;
+  domain: string;
 }
 
-interface Department {
-  id: string;
-  name: string;
-}
-
-interface ClassRef {
-  id: string;
-  name: string;
-}
-
-interface StaffProfile {
-  id: string;
-  position?: string | null;
-  department?: Department | null;
-  class?: ClassRef | null;
-}
-
-interface StudentProfile {
-  id: string;
-  class?: ClassRef | null;
-}
-
-export interface User {
+interface User {
   id: string;
   name: string;
   email: string;
   role: string;
-  schoolId: string;
-  school?: School | null;
-  staff?: StaffProfile | null;
-  student?: StudentProfile | null;
+  school: School;
+  department?: string;
 }
 
 interface UserStoreState {
@@ -48,6 +25,7 @@ interface UserStoreState {
   error: string | null;
   fetchUser: () => Promise<void>;
   setUser: (user: User | null) => void;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -58,39 +36,50 @@ export const useUserStore = create<UserStoreState>()(
       loading: false,
       error: null,
 
-      // 🔄 Fetch authenticated user data
+      // 🔄 Fetch authenticated user from /me
       fetchUser: async () => {
+        set({ loading: true, error: null });
         try {
-          set({ loading: true, error: null });
           const res = await fetch("/api/auth/me", { credentials: "include" });
-          if (!res.ok) {
-            if (res.status === 401) {
-              set({ user: null, loading: false });
-              return;
-            }
-            throw new Error(`Failed with status ${res.status}`);
-          }
           const data = await res.json();
-          set({ user: data, loading: false });
+          if (!res.ok) throw new Error(data?.error || "Failed to fetch user");
+          set({ user: data.user, loading: false });
         } catch (err: any) {
-          console.error("useUserStore.fetchUser error:", err);
-          set({ error: "Failed to fetch user", loading: false });
+          console.error("fetchUser error:", err);
+          set({ error: err.message, loading: false });
         }
       },
 
-      // ✍️ Manually update or clear user
+      // ✍️ Directly update or clear user
       setUser: (user) => set({ user }),
 
-      // 🚪 Clear session data
+      // 🔑 Login helper
+      login: async (email: string, password: string) => {
+        set({ loading: true, error: null });
+        try {
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ email, password }),
+            headers: { "Content-Type": "application/json" },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.error || "Login failed");
+          set({ user: data.user, loading: false });
+        } catch (err: any) {
+          console.error("login error:", err);
+          set({ error: err.message, loading: false });
+        }
+      },
+
+      // 🚪 Logout and clear store + call API
       logout: () => {
         set({ user: null, loading: false, error: null });
-        // Optional: clear cookie on API side if you have /api/auth/logout
         fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
       },
     }),
     {
-      name: "user-storage", // persisted key
-      partialize: (state) => ({ user: state.user }), // store only user object
+      name: "user-storage",
+      partialize: (state) => ({ user: state.user }),
     }
   )
 );

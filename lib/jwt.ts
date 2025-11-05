@@ -1,3 +1,6 @@
+// lib/jwt.ts
+// Purpose: Sign and verify JWTs with minimal user info including schoolDomain
+
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
@@ -6,7 +9,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 export interface JwtPayload {
   id: string;
   role: string;
-  schoolId: string;
+  schoolDomain: string;
 }
 
 // Sign JWT

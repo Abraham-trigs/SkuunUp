@@ -1,9 +1,13 @@
+// app/api/auth/login/route.ts
+// Purpose: Authenticate user and return minimal info with role & school domain
+
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { signJwt } from "@/lib/jwt";
 import { COOKIE_NAME, COOKIE_OPTIONS } from "@/lib/cookies";
+import { inferRoleFromPosition, inferDepartmentFromPosition } from "@/lib/api/constants/roleInference";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -17,24 +21,44 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { school: true },
+      include: { staff: true, school: true },
     });
 
-    if (!user) return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
     const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    if (!isValid) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
-    const token = signJwt({ id: user.id, role: user.role, schoolId: user.schoolId });
+    // Infer role & department from staff position (if staff)
+    let role = user.role;
+    let department: string | undefined;
+    if (user.staff?.position) {
+      role = inferRoleFromPosition(user.staff.position);
+      department = inferDepartmentFromPosition(user.staff.position);
+    }
 
-    const res = NextResponse.json({ message: "Login successful" });
+    const token = signJwt({ id: user.id, role, schoolId: user.schoolId });
+
+    const res = NextResponse.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role,
+        school: { id: user.school.id, name: user.school.name, domain: user.school.domain },
+        department,
+      },
+      message: "Login successful",
+    });
+
     res.cookies.set(COOKIE_NAME, token, COOKIE_OPTIONS);
     return res;
+
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ message: error.errors.map(e => e.message).join(", ") }, { status: 400 });
+      return NextResponse.json({ error: error.errors.map(e => e.message).join(", ") }, { status: 400 });
     }
     console.error("Login error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,19 +1,20 @@
+// lib/cookieUser.ts
+// Purpose: Safely retrieve authenticated user from HTTP-only JWT cookie using Prisma Role enum
+
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/db";
+import { prisma, Role } from "@/lib/db"; // Role imported from Prisma schema
 import { verifyJwt } from "@/lib/jwt";
 import { COOKIE_NAME } from "@/lib/cookies";
 
 /**
- * Safely retrieves the currently authenticated user
- * from the HTTP-only JWT cookie.
- *
- * Returns `null` if not authenticated or token invalid.
+ * Returns minimal authenticated user info if JWT token is valid.
+ * Adds `schoolDomain` as a top-level property for easier client access.
+ * Otherwise returns null.
  */
 export async function cookieUser() {
   try {
-    const cookieStore = await cookies(); // ✅ await here
+    const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value;
-
     if (!token) return null;
 
     const payload = verifyJwt(token);
@@ -25,14 +26,26 @@ export async function cookieUser() {
         id: true,
         name: true,
         email: true,
-        role: true,
-        schoolId: true,
+        role: true as Role,
+        school: { select: { id: true, name: true, domain: true } },
       },
     });
 
-    return user || null;
+    if (!user) return null;
+
+    return {
+      ...user,
+      schoolDomain: user.school.domain, // top-level convenience
+    };
   } catch (err) {
     console.error("cookieUser() error:", err);
     return null;
   }
 }
+
+/* Example usage:
+const user = await cookieUser();
+if (user) {
+  console.log(user.role, user.schoolDomain); // now accessible at top-level
+}
+*/

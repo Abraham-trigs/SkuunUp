@@ -34,32 +34,11 @@ enum Role {
   AUDITOR
 }
 
-enum FinanceType {
-  INCOME
-  EXPENSE
-}
-
-enum FeeType {
-  TUITION
-  EXAM
-  LAB
-  SPORTS
-  LIBRARY
-  TRANSPORT
-  UNIFORM
-  OTHER
-}
-
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  LATE
-  EXCUSED
-}
-
 model School {
   id        String   @id @default(cuid())
   name      String   @unique
+  domain    String   @unique // default domain for generating emails
+  email     String   @unique // school's main contact email
   address   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -89,19 +68,6 @@ model User {
   LibraryStaff LibraryStaff?
 }
 
-model Class {
-  id        String    @id @default(cuid())
-  name      String
-  schoolId  String
-  school    School    @relation(fields: [schoolId], references: [id])
-  students  Student[]
-  staff     Staff[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@unique([name, schoolId])
-}
-
 model Student {
   id         String   @id @default(cuid())
   userId     String   @unique
@@ -116,7 +82,54 @@ model Student {
   transactions Transaction[]
   purchases    Purchase[]
   attendances  StudentAttendance[]
-  Borrow       Borrow[]
+  borrows      Borrow[]
+
+  subjects Subject[] @relation("StudentSubjects") // many-to-many with Subject
+}
+
+model Class {
+  id       String    @id @default(cuid())
+  name     String
+  schoolId String
+  school   School    @relation(fields: [schoolId], references: [id])
+  students Student[]
+  staff    Staff[]
+  exams    Exam[] // Fixed: opposite relation for Exam.class
+  subjects Subject[] @relation("ClassSubjects") // Fixed: opposite of Subject.classes
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, schoolId])
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  code      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exams Exam[]
+  staff Staff[] @relation("StaffSubjects")
+
+  students Student[] @relation("StudentSubjects") // many-to-many
+  classes  Class[]   @relation("ClassSubjects") // many-to-many
+}
+
+model Exam {
+  id        String   @id @default(cuid())
+  studentId String?
+  student   Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId   String?
+  class     Class?   @relation(fields: [classId], references: [id])
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  score     Float?
+  maxScore  Float?
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Staff {
@@ -129,11 +142,11 @@ model Staff {
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
   salary       Float?
-  subject      String?
   hireDate     DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  subjects    Subject[]         @relation("StaffSubjects") // optional: subjects they teach
   attendances StaffAttendance[]
 }
 
@@ -142,6 +155,13 @@ model Department {
   name         String         @unique
   staff        Staff[]
   LibraryStaff LibraryStaff[]
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
 }
 
 model StudentAttendance {
@@ -183,20 +203,25 @@ model Parent {
   updatedAt DateTime @updatedAt
 }
 
-model Exam {
+// prisma/library.prisma
+// Library management models integrated with Department and School
+
+model Author {
   id        String   @id @default(cuid())
-  studentId String
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subject   String
-  score     Float
-  maxScore  Float
-  date      DateTime @default(now())
+  name      String
+  bio       String?
+  books     Book[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-// prisma/library.prisma
-// Library management models integrated with Department and School
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  books     Book[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
 model Book {
   id          String    @id @default(cuid())
@@ -214,23 +239,6 @@ model Book {
   updatedAt   DateTime  @updatedAt
 
   borrows Borrow[]
-}
-
-model Author {
-  id        String   @id @default(cuid())
-  name      String
-  bio       String?
-  books     Book[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Category {
-  id        String   @id @default(cuid())
-  name      String
-  books     Book[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model Borrow {
@@ -260,6 +268,26 @@ model LibraryStaff {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 }
+
+//TRANSACTION
+
+enum FinanceType {
+  INCOME
+  EXPENSE
+}
+
+enum FeeType {
+  TUITION
+  EXAM
+  LAB
+  SPORTS
+  LIBRARY
+  TRANSPORT
+  UNIFORM
+  OTHER
+}
+
+//FINANCE 
 
 model Transaction {
   id          String      @id @default(cuid())
@@ -314,6 +342,8 @@ model Purchase {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+//SCHOOL SCOPE
 
 model Activity {
   id          String   @id @default(cuid())
