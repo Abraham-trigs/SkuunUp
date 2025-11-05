@@ -1,5 +1,6 @@
 // app/dashboard/staff/components/AddStaffModal.tsx
-// Modal form to create new staff; infers role/department/class automatically and posts to API with hashed password
+// Purpose: Modal form to create new staff; infers role/department/class automatically,
+//          posts via Zustand store (useStaffStore), supports optimistic UI and school scoping.
 
 "use client";
 
@@ -68,16 +69,17 @@ export default function AddStaffModal({ isOpen, onClose }: AddStaffModalProps) {
 
   const position = watch("position");
 
-  // ---------------------- Fetch classes on open ----------------------
+  // ---------------------- Fetch classes when modal opens ----------------------
   useEffect(() => {
     if (isOpen) fetchClasses();
   }, [isOpen, fetchClasses]);
 
-  // ---------------------- Auto-fill department ----------------------
+  // ---------------------- Auto-fill department based on role ----------------------
   useEffect(() => {
     if (position) {
-      const inferredDept = inferRoleFromPosition(position)
-        ? roleToDepartment[inferRoleFromPosition(position)]
+      const inferredRole = inferRoleFromPosition(position);
+      const inferredDept = inferredRole
+        ? roleToDepartment[inferredRole]
         : undefined;
       if (inferredDept)
         reset((prev) => ({ ...prev, department: inferredDept }));
@@ -92,23 +94,28 @@ export default function AddStaffModal({ isOpen, onClose }: AddStaffModalProps) {
   const onSubmit = async (data: StaffFormValues) => {
     const role = inferRoleFromPosition(data.position);
 
+    // ---------------------- User payload ----------------------
     const userPayload = {
       name: data.name,
       email: data.email,
-      password: data.password, // Will be hashed by the backend
+      password: data.password, // backend hashes password
       role,
     };
 
+    // ---------------------- Staff payload with school-aware scoping ----------------------
     const staffPayload = {
       position: data.position,
       department: data.department || roleToDepartment[role],
       classId: data.classId ?? null,
       salary: data.salary ?? null,
       subject: data.subject ?? null,
+      // backend will automatically tie to current user's school
     };
 
+    // ---------------------- Call store's createStaff ----------------------
     await createStaff(userPayload, staffPayload);
 
+    // ---------------------- Reset form and close modal ----------------------
     reset();
     onClose();
   };
@@ -215,7 +222,7 @@ export default function AddStaffModal({ isOpen, onClose }: AddStaffModalProps) {
               />
             </div>
 
-            {/* Class */}
+            {/* Class (conditionally rendered) */}
             {requiresClass && (
               <div>
                 <label className="block text-sm font-medium">Class</label>
@@ -256,3 +263,18 @@ export default function AddStaffModal({ isOpen, onClose }: AddStaffModalProps) {
     </Dialog>
   );
 }
+
+/* Design reasoning:
+- Uses Zustand store for optimistic updates and consistent state.
+- Department auto-inference reduces manual errors.
+- Class selection conditionally renders for roles that require it.
+- Backend ties created staff to the current user's school automatically.
+Structure:
+- Modal form with react-hook-form + zod validation.
+- Reset form on close or after successful submission.
+Implementation guidance:
+- Wire into staff list page; ensure fetchClasses() populates class dropdown.
+- Can extend for bulk creation or role-specific fields.
+Scalability insight:
+- Store-centric architecture allows adding more relations (departments, roles, schools) without changing modal logic.
+*/

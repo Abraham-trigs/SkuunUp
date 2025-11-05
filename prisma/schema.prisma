@@ -66,6 +66,8 @@ model User {
   student      Student?
   staff        Staff?
   LibraryStaff LibraryStaff?
+
+  createdSubjects Subject[]
 }
 
 model Student {
@@ -110,9 +112,12 @@ model Subject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  exams Exam[]
-  staff Staff[] @relation("StaffSubjects")
+  // Make createdById nullable initially to avoid breaking existing rows
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
 
+  exams    Exam[]
+  staff    Staff[]   @relation("StaffSubjects")
   students Student[] @relation("StudentSubjects") // many-to-many
   classes  Class[]   @relation("ClassSubjects") // many-to-many
 }

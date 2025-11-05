@@ -1,40 +1,63 @@
-// stores/subjectStore.ts
-// Manages Subject state, CRUD operations, and pagination/search
+// app/stores/subjectStore.ts
+// Purpose: Zustand store to manage Subjects with pagination, search, filters, and CRUD operations
 
 import { create } from "zustand";
 import { Subject } from "@prisma/client";
 
-interface SubjectState {
-  subjects: Subject[];
-  total: number;
-  loading: boolean;
-  error: string | null;
-  fetchSubjects: (options?: { search?: string; page?: number; limit?: number }) => Promise<void>;
-  createSubject: (data: Partial<Subject>) => Promise<Subject | null>;
-  updateSubject: (id: string, data: Partial<Subject>) => Promise<Subject | null>;
-  deleteSubject: (id: string) => Promise<boolean>;
-  reset: () => void;
+interface SubjectFilters {
+  classId?: string;
+  staffId?: string;
+  fromDate?: string; // ISO string
+  toDate?: string;   // ISO string
 }
 
-export const useSubjectStore = create<SubjectState>((set, get) => ({
+interface SubjectStoreState {
+  subjects: Subject[];
+  total: number;
+  page: number;
+  limit: number;
+  search: string;
+  filters: SubjectFilters;
+  loading: boolean;
+  error: string | null;
+
+  fetchSubjects: (page?: number, search?: string, filters?: SubjectFilters) => Promise<void>;
+  createSubject: (data: { name: string; code?: string | null }) => Promise<Subject | void>;
+  updateSubject: (id: string, data: { name?: string; code?: string | null }) => Promise<Subject | void>;
+  deleteSubject: (id: string) => Promise<void>;
+  setSearch: (search: string) => void;
+  setFilters: (filters: SubjectFilters) => void;
+}
+
+export const useSubjectStore = create<SubjectStoreState>((set, get) => ({
   subjects: [],
   total: 0,
+  page: 1,
+  limit: 20,
+  search: "",
+  filters: {},
   loading: false,
   error: null,
 
-  fetchSubjects: async ({ search = "", page = 1, limit = 20 } = {}) => {
+  fetchSubjects: async (page = get().page, search = get().search, filters = get().filters) => {
     set({ loading: true, error: null });
+
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(get().limit),
+      });
       if (search) params.append("search", search);
-      params.append("page", String(page));
-      params.append("limit", String(limit));
+      if (filters.classId) params.append("classId", filters.classId);
+      if (filters.staffId) params.append("staffId", filters.staffId);
+      if (filters.fromDate) params.append("fromDate", filters.fromDate);
+      if (filters.toDate) params.append("toDate", filters.toDate);
 
       const res = await fetch(`/api/subjects?${params.toString()}`);
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to fetch subjects");
 
-      if (res.ok) set({ subjects: json.data, total: json.total });
-      else set({ error: json.error });
+      set({ subjects: json.data, total: json.meta.total, page, search, filters });
     } catch (err: any) {
       set({ error: err.message });
     } finally {
@@ -43,6 +66,7 @@ export const useSubjectStore = create<SubjectState>((set, get) => ({
   },
 
   createSubject: async (data) => {
+    set({ loading: true, error: null });
     try {
       const res = await fetch("/api/subjects", {
         method: "POST",
@@ -50,20 +74,19 @@ export const useSubjectStore = create<SubjectState>((set, get) => ({
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (res.ok) {
-        set({ subjects: [json.data, ...get().subjects] });
-        return json.data;
-      } else {
-        set({ error: json.error });
-        return null;
-      }
+      if (!res.ok) throw new Error(JSON.stringify(json.error) || "Failed to create subject");
+
+      set((state) => ({ subjects: [json, ...state.subjects], total: state.total + 1 }));
+      return json;
     } catch (err: any) {
       set({ error: err.message });
-      return null;
+    } finally {
+      set({ loading: false });
     }
   },
 
   updateSubject: async (id, data) => {
+    set({ loading: true, error: null });
     try {
       const res = await fetch(`/api/subjects/${id}`, {
         method: "PUT",
@@ -71,35 +94,61 @@ export const useSubjectStore = create<SubjectState>((set, get) => ({
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (res.ok) {
-        set({ subjects: get().subjects.map((s) => (s.id === id ? json.data : s)) });
-        return json.data;
-      } else {
-        set({ error: json.error });
-        return null;
-      }
+      if (!res.ok) throw new Error(JSON.stringify(json.error) || "Failed to update subject");
+
+      set((state) => ({
+        subjects: state.subjects.map((s) => (s.id === id ? json : s)),
+      }));
+      return json;
     } catch (err: any) {
       set({ error: err.message });
-      return null;
+    } finally {
+      set({ loading: false });
     }
   },
 
   deleteSubject: async (id) => {
+    set({ loading: true, error: null });
     try {
       const res = await fetch(`/api/subjects/${id}`, { method: "DELETE" });
       const json = await res.json();
-      if (res.ok) {
-        set({ subjects: get().subjects.filter((s) => s.id !== id) });
-        return true;
-      } else {
-        set({ error: json.error });
-        return false;
-      }
+      if (!res.ok) throw new Error(json.error || "Failed to delete subject");
+
+      set((state) => ({
+        subjects: state.subjects.filter((s) => s.id !== id),
+        total: state.total - 1,
+      }));
     } catch (err: any) {
       set({ error: err.message });
-      return false;
+    } finally {
+      set({ loading: false });
     }
   },
 
-  reset: () => set({ subjects: [], total: 0, loading: false, error: null }),
+  setSearch: (search) => set({ search }),
+
+  setFilters: (filters: SubjectFilters) => set({ filters }),
 }));
+
+/*
+Design reasoning:
+- Introduced flexible filter options (classId, staffId, date range) to enable refined search.
+- Pagination and search remain supported for large datasets.
+- Optimistic updates after create/update/delete ensure smooth UI.
+
+Structure:
+- subjects, total, page, limit, search, filters: state
+- loading, error: UI feedback
+- fetchSubjects: supports pagination, search, and filters
+- createSubject/updateSubject/deleteSubject: CRUD
+- setSearch/setFilters: update search/filter state
+
+Implementation guidance:
+- Call fetchSubjects() whenever filters or search term change.
+- Can implement debounce on search to minimize API calls.
+- Infinite scroll is possible by incrementing page and appending subjects.
+
+Scalability insight:
+- Can easily extend filters with additional parameters (e.g., department, term, semester).
+- Supports infinite scroll or server-side filtering for very large datasets without refactoring store.
+*/
