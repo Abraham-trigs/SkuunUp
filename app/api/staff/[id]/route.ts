@@ -1,11 +1,11 @@
 // app/api/staff/[id]/route.ts
-// Purpose: Safely update a staff member with nested user data, class, and department inference.
+// Purpose: Update or delete a staff member securely, enforcing school scoping, nested user updates, and department inference.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { cookieUser } from "@/lib/cookieUser";
-import { inferDepartmentFromPosition, requiresClass } from "@/lib/api/constants/roleInference";
+import { inferDepartmentFromPosition, requiresClass } from "@/lib/api/constants/roleInference.ts";
 
 // ------------------------- Schemas -------------------------
 const staffUpdateSchema = z.object({
@@ -29,6 +29,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       include: { user: true },
     });
     if (!staff) return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+
+    // Ensure staff belongs to current user's school
+    if (staff.user.schoolId !== currentUser.school.id)
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const departmentName = data.position ? inferDepartmentFromPosition(data.position) : null;
     const department = departmentName
@@ -67,6 +71,16 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const currentUser = await cookieUser(req);
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const staff = await prisma.staff.findUnique({
+    where: { id: params.id },
+    include: { user: true },
+  });
+  if (!staff) return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+
+  // Ensure staff belongs to current user's school
+  if (staff.user.schoolId !== currentUser.school.id)
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   try {
     await prisma.staff.delete({ where: { id: params.id } });
     return NextResponse.json({ success: true });
@@ -76,13 +90,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 }
 
 /* Design reasoning:
-- PUT validates incoming data, updates nested user and department, and ensures class assignment matches role.
-- DELETE ensures secure removal of staff while returning a consistent success message.
+- PUT ensures staff updates respect school boundaries and maintain nested user and department consistency.
+- DELETE enforces school scoping to prevent accidental removal across schools.
 Structure:
 - PUT: update staff
 - DELETE: delete staff
 Implementation guidance:
-- Wire these into a staff management page with edit/delete buttons and optimistic UI updates.
+- Wire into staff management UI with edit/delete controls and optimistic updates.
 Scalability insight:
-- Can extend PUT with audit logging or role-based restrictions without changing endpoint structure.
+- Future enhancements: audit logs, role-based restrictions, or batch updates without changing endpoint structure.
 */

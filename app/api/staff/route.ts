@@ -1,11 +1,11 @@
 // app/api/staff/route.ts
-// Purpose: Handle listing and creating staff with full pagination, search, filtering, auth, role & department inference, and secure password handling.
+// Purpose: List and create staff scoped to authenticated user's school with pagination, search, filtering, role & department inference, and secure password handling.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { cookieUser } from "@/lib/cookieUser";
-import { inferRoleFromPosition, inferDepartmentFromPosition, requiresClass } from "@/lib/api/constants/roleInference";
+import { inferRoleFromPosition, inferDepartmentFromPosition, requiresClass } from "@/lib/api/constants/roleInference.ts";
 import bcrypt from "bcryptjs";
 
 // ------------------------- Types -------------------------
@@ -44,14 +44,14 @@ export async function GET(req: NextRequest) {
   const page = Number(url.searchParams.get("page") || 1);
   const perPage = Number(url.searchParams.get("perPage") || 10);
 
-  const where: any = {};
+  const where: any = { user: { schoolId: user.school.id } }; // enforce school scope
   if (search) {
     where.OR = [
       { user: { name: { contains: search, mode: "insensitive" } } },
       { user: { email: { contains: search, mode: "insensitive" } } },
     ];
   }
-  if (role) where.role = role;
+  if (role) where.user.role = role;
   if (departmentId) where.departmentId = departmentId;
 
   const [staffList, total] = await prisma.$transaction([
@@ -80,7 +80,9 @@ export async function POST(req: NextRequest) {
 
     const role = inferRoleFromPosition(data.position);
     const departmentName = inferDepartmentFromPosition(data.position);
-    const department = departmentName ? await prisma.department.findUnique({ where: { name: departmentName } }) : null;
+    const department = departmentName
+      ? await prisma.department.findUnique({ where: { name: departmentName } })
+      : null;
 
     return await prisma.$transaction(async (tx) => {
       const existingUser = await tx.user.findUnique({ where: { email: data.email } });
@@ -89,7 +91,13 @@ export async function POST(req: NextRequest) {
       const hashedPassword = await bcrypt.hash(data.password, 10);
 
       const newUser = await tx.user.create({
-        data: { name: data.name, email: data.email, password: hashedPassword, role, schoolId: user.schoolId },
+        data: {
+          name: data.name,
+          email: data.email,
+          password: hashedPassword,
+          role,
+          schoolId: user.school.id, // assign to current user's school
+        },
       });
 
       const newStaff = await tx.staff.create({
@@ -114,13 +122,13 @@ export async function POST(req: NextRequest) {
 }
 
 /* Design reasoning:
-- GET supports search, pagination, and filtering by role/department for efficient staff management.
-- POST securely hashes passwords and infers role/department to maintain consistency.
+- GET ensures staff listing is restricted to the authenticated user's school, with search, pagination, and filtering for better UX.
+- POST securely hashes passwords, infers role/department, and enforces school scoping to maintain data integrity.
 Structure:
 - GET: list staff
-- POST: create new staff
+- POST: create staff
 Implementation guidance:
-- Use in a staff management page with live search and paginated table.
+- Integrate with staff management UI with live search and paginated table.
 Scalability insight:
-- Additional filters (class, hireDate, etc.) can be added without changing core structure.
+- Future filters (e.g., hireDate, subjects) can be added without changing core endpoint.
 */
