@@ -1,6 +1,4 @@
 // app/staff/page.tsx
-// Purpose: Responsive Staff Management page with Add/Edit/Delete modals and click-to-view staff detail using unified UserStaffFormButton.
-
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -8,7 +6,7 @@ import { useRouter } from "next/navigation";
 import EditStaffModal from "./components/EditStaffModal";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import { useStaffStore, Staff } from "@/app/store/useStaffStore";
-import UserFormButton from "../../dashboard/components/UserFormButton.tsx";
+import StaffProfileForm from "../staff/components/StaffProfileForm.tsx";
 
 export default function StaffPage() {
   const router = useRouter();
@@ -29,6 +27,9 @@ export default function StaffPage() {
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedToDelete, setSelectedToDelete] = useState<Staff | null>(null);
+
+  // Add Staff modal state
+  const [isAddOpen, setIsAddOpen] = useState(false);
 
   useEffect(() => {
     fetchStaffDebounced(page, search);
@@ -52,8 +53,12 @@ export default function StaffPage() {
 
   const closeDelete = () => setSelectedToDelete(null);
 
-  const goToDetail = (id: string) => {
-    router.push(`/dashboard/staff/${id}`);
+  const goToDetail = (id: string) => router.push(`/dashboard/staff/${id}`);
+
+  const handleAddSuccess = (newStaff: any) => {
+    console.log("Staff created:", newStaff);
+    setIsAddOpen(false);
+    fetchStaffDebounced(page, search);
   };
 
   return (
@@ -61,13 +66,15 @@ export default function StaffPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2 sm:gap-0">
         <h1 className="text-2xl font-bold">Staff Management</h1>
-        <UserFormButton
-          buttonLabel="Add Staff"
-          onSuccess={(user) => {
-            console.log("Staff created:", user);
-            fetchStaffDebounced(page, search); // refresh list
-          }}
-        />
+
+        {/* Add Staff Button opens Step Form */}
+        <button
+          type="button"
+          className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+          onClick={() => setIsAddOpen(true)}
+        >
+          Add Staff
+        </button>
       </div>
 
       {/* Search */}
@@ -82,7 +89,7 @@ export default function StaffPage() {
         />
       </div>
 
-      {/* Main states */}
+      {/* Staff List */}
       {loading ? (
         <div className="p-4 text-center text-gray-500">Loading staff...</div>
       ) : error ? (
@@ -91,7 +98,6 @@ export default function StaffPage() {
         <div className="p-4 text-center text-gray-500">No staff found.</div>
       ) : (
         <>
-          {/* Desktop Table */}
           <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full border border-gray-300 text-sm md:text-base">
               <thead className="bg-gray-100">
@@ -140,7 +146,7 @@ export default function StaffPage() {
             </table>
           </div>
 
-          {/* Mobile Card List */}
+          {/* Mobile Cards */}
           <div className="md:hidden flex flex-col gap-3">
             {safeStaffList.map((staff) => (
               <div
@@ -207,6 +213,22 @@ export default function StaffPage() {
         </div>
       )}
 
+      {/* Add Staff Modal (Step Form) */}
+      {isAddOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 relative">
+            <button
+              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
+              onClick={() => setIsAddOpen(false)}
+            >
+              ✕
+            </button>
+            <h2 className="text-xl font-bold mb-4">Add Staff</h2>
+            <StaffProfileForm onSuccess={handleAddSuccess} />
+          </div>
+        </div>
+      )}
+
       {/* Edit Modal */}
       {isEditOpen && selectedStaff && (
         <EditStaffModal
@@ -227,21 +249,3 @@ export default function StaffPage() {
     </div>
   );
 }
-
-// ------------------- Design reasoning -------------------
-// - Replaced old AddStaffModal button with reusable UserFormButton.
-// - Maintains full responsive table and card UI for mobile/desktop.
-// - Integrates with Zustand store for staff data and handles optimistic updates.
-// - Search, pagination, edit, and delete fully functional with accessible modals.
-
-// ------------------- Structure -------------------
-// Exports default StaffPage.
-// Local functions: handleEditClick, handleDeleteClick, goToDetail, AddStaffModalButton replaced with UserFormButton inline.
-
-// ------------------- Implementation guidance -------------------
-// Use this page directly under /app/staff. UserFormButton handles both user and staff creation.
-// onSuccess can trigger fetchStaffDebounced to refresh list automatically.
-
-// ------------------- Scalability insight -------------------
-// - Easy to extend modal to include extra staff fields, permissions, or dynamic role assignment.
-// - Unified form allows consistent validation and future API changes without touching the page.

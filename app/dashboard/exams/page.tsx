@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import ExamsFormModal from "./components/ExamsFormModal";
 import ConfirmDeleteExamModal from "./components/ConfirmDeleteExamModal";
-import { useExamStore } from "@/app/store/examsStore.ts";
+import { useExamStore, Exam } from "@/app/store/examsStore.ts"; // make sure Exam type exists
 
 export default function ExamsPage() {
   const {
@@ -21,18 +21,19 @@ export default function ExamsPage() {
     deleteExam,
   } = useExamStore();
 
-  const [selectedExam, setSelectedExam] = useState(null);
+  const [selectedExam, setSelectedExam] = useState<Exam | null>(null); // ✅ typed
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-  // Load all exams on mount
   useEffect(() => {
     fetchExams({ page, search });
-  }, []);
+  }, [page, search, fetchExams]);
 
-  const handleDelete = async (examId: string) => {
-    await deleteExam(examId);
+  const handleDelete = async () => {
+    if (!selectedExam?.id) return; // ✅ safety check
+    await deleteExam(selectedExam.id);
     setIsDeleteOpen(false);
+    setSelectedExam(null);
     fetchExams({ page, search });
   };
 
@@ -44,6 +45,7 @@ export default function ExamsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
+      {/* Header */}
       <header className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Exams</h1>
         <button
@@ -54,7 +56,7 @@ export default function ExamsPage() {
         </button>
       </header>
 
-      {/* Search Input */}
+      {/* Search */}
       <div className="flex justify-end mb-4">
         <input
           type="text"
@@ -65,7 +67,7 @@ export default function ExamsPage() {
         />
       </div>
 
-      {/* Loading/Error */}
+      {/* Loading / Error / Exams */}
       {loading ? (
         <div className="flex justify-center mt-10">
           <Loader2 className="animate-spin w-10 h-10 text-gray-400" />
@@ -140,7 +142,7 @@ export default function ExamsPage() {
       {/* Modals */}
       {isModalOpen && (
         <ExamsFormModal
-          exam={selectedExam}
+          exam={selectedExam ?? undefined} // ✅ never null inside modal
           onClose={() => {
             setSelectedExam(null);
             setIsModalOpen(false);
@@ -153,7 +155,7 @@ export default function ExamsPage() {
         <ConfirmDeleteExamModal
           exam={selectedExam}
           onClose={() => setIsDeleteOpen(false)}
-          onConfirm={() => handleDelete(selectedExam.id)}
+          onConfirm={handleDelete} // ✅ safety check inside handler
         />
       )}
     </div>

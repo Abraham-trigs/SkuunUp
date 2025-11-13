@@ -25,9 +25,10 @@ export type Role = "ADMIN" | "TEACHER" | "STUDENT" | "PARENT";
 const rolePermissions: Record<Role, string[]> = {
   ADMIN: [
     "dashboard",
+    "classes",
+    "subject", // added
     "students",
     "staff",
-    "classes",
     "exams",
     "finance",
     "library",
@@ -35,7 +36,14 @@ const rolePermissions: Record<Role, string[]> = {
     "reports",
     "settings",
   ],
-  TEACHER: ["dashboard", "students", "exams", "reports"],
+  TEACHER: [
+    "dashboard",
+    "classes",
+    "subject", // added
+    "students",
+    "exams",
+    "reports",
+  ],
   STUDENT: ["dashboard", "courses", "exams"],
   PARENT: ["dashboard", "children"],
 };
@@ -43,6 +51,12 @@ const rolePermissions: Record<Role, string[]> = {
 const menuItems = [
   { label: "Dashboard", icon: Home, key: "dashboard", href: "/dashboard" },
   { label: "Classes", icon: Book, key: "classes", href: "/dashboard/classes" },
+  {
+    label: "Subjects",
+    icon: BookOpen,
+    key: "subject",
+    href: "/dashboard/subjects",
+  }, // added
   {
     label: "Students",
     icon: Users,

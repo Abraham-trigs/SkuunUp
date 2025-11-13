@@ -1,76 +1,68 @@
-// app/api/users/[id]/route.ts
-// Purpose: User item API – retrieve, update, delete by ID (role only applied at Staff)
-
+// app/api/staff/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@lib/prisma.ts";
-import { z } from "zod";
-import bcrypt from "bcryptjs";
-import { cookieUser } from "@/lib/cookieUser.ts";
-import { Role } from "@/lib/db.ts";
+import { prisma } from "@/lib/prisma";
+import { cookieUser } from "@/lib/cookieUser";
 
-const userUpdateSchema = z.object({
-  name: z.string().min(1).optional(),
-  email: z.string().email().optional(),
-  password: z.string().min(6).optional(),
-  busId: z.string().optional().nullable(),
-});
-
-// ------------------------- GET: Retrieve user -------------------------
+// ------------------------- GET: Retrieve Staff -------------------------
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const authUser = await cookieUser();
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await prisma.user.findFirst({
-    where: { id: params.id, schoolId: authUser.schoolId },
+  const staff = await prisma.staff.findFirst({
+    where: { id: params.id, user: { schoolId: authUser.schoolId } },
+    include: { user: true, class: true, department: true, subjects: true },
   });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  return NextResponse.json(user);
+  if (!staff) return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+  return NextResponse.json(staff);
 }
 
-// ------------------------- PUT: Update user -------------------------
+// ------------------------- PUT: Update Staff -------------------------
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const authUser = await cookieUser();
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (![Role.ADMIN, Role.PRINCIPAL].includes(authUser.role))
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
   try {
     const body = await req.json();
-    const data = userUpdateSchema.parse(body);
+    const { position, departmentId, classId, salary } = body;
 
-    if (data.email) {
-      const exists = await prisma.user.findFirst({
-        where: { email: data.email, id: { not: params.id } },
-      });
-      if (exists) return NextResponse.json({ error: { email: ["Email already exists"] } }, { status: 400 });
-    }
-
-    if (data.password) data.password = await bcrypt.hash(data.password, 10);
-
-    const updated = await prisma.user.update({
-      where: { id: params.id },
-      data,
+    const updated = await prisma.staff.updateMany({
+      where: { id: params.id, user: { schoolId: authUser.schoolId } },
+      data: {
+        position,
+        departmentId: departmentId || null,
+        classId: classId || null,
+        salary: salary || null,
+      },
     });
 
-    return NextResponse.json(updated);
+    if (updated.count === 0)
+      return NextResponse.json({ error: "Staff not found or forbidden" }, { status: 404 });
+
+    const staff = await prisma.staff.findUnique({
+      where: { id: params.id },
+      include: { user: true, class: true, department: true, subjects: true },
+    });
+
+    return NextResponse.json(staff);
   } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.flatten() }, { status: 400 });
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-// ------------------------- DELETE: Remove user -------------------------
+// ------------------------- DELETE: Remove Staff -------------------------
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const authUser = await cookieUser();
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (![Role.ADMIN, Role.PRINCIPAL].includes(authUser.role))
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
   try {
-    await prisma.user.delete({ where: { id: params.id } });
+    const deleted = await prisma.staff.deleteMany({
+      where: { id: params.id, user: { schoolId: authUser.schoolId } },
+    });
+
+    if (deleted.count === 0)
+      return NextResponse.json({ error: "Staff not found or forbidden" }, { status: 404 });
+
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

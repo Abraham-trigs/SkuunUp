@@ -32,38 +32,40 @@ export default function StudentsPage() {
 
   const totalPages = Math.ceil(total / perPage);
 
-  // Fetch students on mount
+  // --- Fetch students on mount and whenever page/perPage changes ---
   useEffect(() => {
     fetchStudents(page, perPage);
-  }, [fetchStudents]);
+    // Do NOT return anything
+  }, [fetchStudents, page, perPage]);
 
-  // Debounced search
+  // --- Debounced search ---
   useEffect(() => {
     const handler = setTimeout(() => {
-      setPage(1); // reset to first page on new search
+      setPage(1);
       setSearch(localSearch); // triggers fetchStudents internally
     }, 300);
-    return () => clearTimeout(handler);
-  }, [localSearch]);
 
-  // AddStudent success callback
+    return () => clearTimeout(handler); // cleanup is correct
+  }, [localSearch, setPage, setSearch]);
+
+  // --- AddStudent success callback ---
   const handleSuccess = () => {
     fetchStudents(page, perPage); // refresh students after adding
   };
 
-  // Navigate to student detail page
+  // --- Navigate to student detail page ---
   const handleRowClick = (student: StudentDetail) => {
-    router.push(`/dashboard/students/${student.id}`); // use student.id, not studentId
+    router.push(`/dashboard/students/${student.id}`);
   };
 
-  // Toggle sorting for table headers
+  // --- Toggle sorting for table headers ---
   const toggleSort = (key: "name" | "email" | "class") => {
     const order = sortBy === key && sortOrder === "asc" ? "desc" : "asc";
     setSort(key, order);
   };
 
   return (
-    <div className="p-6 space-y-6 ">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mt-7">
         <h1 className="text-2xl font-semibold">Students</h1>

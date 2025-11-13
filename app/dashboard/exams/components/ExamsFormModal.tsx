@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useExamStore } from "@/app/store/examsStore.ts";
 import { Dialog } from "@headlessui/react";
 import { X } from "lucide-react";
+import { useExamStore, Exam } from "@/app/store/examsStore.ts";
 
 interface ExamsFormModalProps {
   isOpen?: boolean;
-  exam?: any;
+  exam?: Exam | null;
   studentId: string;
   onClose: () => void;
 }
@@ -24,9 +24,10 @@ export default function ExamsFormModal({
 
   const { createExam, updateExam } = useExamStore();
 
+  // Load exam data safely
   useEffect(() => {
     if (exam) {
-      setSubject(exam.subject || "");
+      setSubject(exam.subject ?? "");
       setScore(exam.score ?? "");
       setMaxScore(exam.maxScore ?? "");
     } else {
@@ -38,20 +39,29 @@ export default function ExamsFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!studentId) {
+      console.error("Student ID is required");
+      return;
+    }
+
     const data = {
-      subject,
-      score: Number(score),
-      maxScore: Number(maxScore),
+      subject: subject.trim(),
+      score: typeof score === "number" ? score : 0,
+      maxScore: typeof maxScore === "number" ? maxScore : 0,
       studentId,
     };
 
-    if (exam?.id) {
-      await updateExam(exam.id, data);
-    } else {
-      await createExam(data);
+    try {
+      if (exam?.id) {
+        await updateExam(exam.id, data);
+      } else {
+        await createExam(data);
+      }
+      onClose();
+    } catch (err: any) {
+      console.error("Failed to save exam:", err.message ?? err);
     }
-
-    onClose(); // modal closes and parent fetches automatically
   };
 
   return (
@@ -87,7 +97,9 @@ export default function ExamsFormModal({
             <input
               type="number"
               value={score}
-              onChange={(e) => setScore(e.target.valueAsNumber)}
+              onChange={(e) =>
+                setScore(e.target.value === "" ? "" : Number(e.target.value))
+              }
               className="mt-1 w-full border rounded px-2 py-1"
               required
             />
@@ -98,7 +110,9 @@ export default function ExamsFormModal({
             <input
               type="number"
               value={maxScore}
-              onChange={(e) => setMaxScore(e.target.valueAsNumber)}
+              onChange={(e) =>
+                setMaxScore(e.target.value === "" ? "" : Number(e.target.value))
+              }
               className="mt-1 w-full border rounded px-2 py-1"
               required
             />

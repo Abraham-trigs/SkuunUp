@@ -34,14 +34,16 @@ export default function AddStudentModal({
 
   // Load classes when modal opens
   useEffect(() => {
-    if (!isOpen) return null;
+    if (!isOpen) return; // ✅ do not return null
 
     fetchClasses().catch(() => setError("Failed to load classes"));
   }, [isOpen, fetchClasses]);
 
   // Auto-select first class when classes are loaded
   useEffect(() => {
-    if (classes.length > 0 && !selectedClass) setSelectedClass(classes[0].id);
+    if (classes.length > 0 && !selectedClass) {
+      setSelectedClass(classes[0].id);
+    }
   }, [classes, selectedClass]);
 
   const handleSubmit = async (e: React.FormEvent) => {
