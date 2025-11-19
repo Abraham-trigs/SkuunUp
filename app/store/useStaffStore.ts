@@ -3,37 +3,28 @@
 
 import { create } from "zustand";
 import { debounce } from "lodash";
-import { apiClient } from "@/lib/apiClient.ts";
-import { Role } from '../components/Sidebar';
+import { apiClient } from "@/lib/apiClient";
 
-// --- Types ---
 export interface Staff {
   id: string;
   userId: string;
-  user: { id: string; name: string; email: string; phone?: string };
-  class?: { id: string; name: string; students?: any[] } | null;
-  department?: { id: string; name: string } | null;
+  user: { id: string; name: string; email: string };
+  class?: { id: string; name: string } | null;
+  department?: { id: string; name } | null;
   position?: string | null;
-  salary?: number | null;
-  subject?: string | null;
-  hireDate?: string | null;
+  salary?: string | null; // string now
+  hireDate?: string | null; // string now
   createdAt: string;
   updatedAt: string;
 }
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-}
-
 interface StaffPayload {
   userId: string;
-  position?: string;
-  department?: string;
+  position: string;
+  department?: string | null;
   classId?: string | null;
-  salary?: number | null;
-  subject?: string | null;
+  salary?: string | null; // always string
+  hireDate?: string | null; // always string
 }
 
 interface StaffState {
@@ -43,8 +34,19 @@ interface StaffState {
   page: number;
   perPage: number;
   search: string;
-  loading: boolean;
-  error: string | null;
+
+  fetchingStaff: boolean;
+  fetchStaffError: string | null;
+
+  creatingStaff: boolean;
+  createStaffError: string | null;
+
+  updatingStaff: boolean;
+  updateStaffError: string | null;
+
+  deletingStaff: boolean;
+  deleteStaffError: string | null;
+
   cache: Record<number, Staff[]>;
 
   setPage: (page: number) => void;
@@ -54,22 +56,25 @@ interface StaffState {
   setSelectedStaff: (staff: Staff | null) => void;
   fetchStaff: (page?: number, search?: string) => Promise<void>;
   fetchStaffDebounced: (page?: number, search?: string) => void;
-  fetchStaffById: (id: string) => Promise<Staff | null>;
 
-  // Step-separated creation
-  createUser: (data: { name: string; email: string; password: string }) => Promise<User | null>;
   createStaffRecord: (staffPayload: StaffPayload) => Promise<Staff | null>;
-
-  updateStaff: (id: string, data: Partial<Staff>) => void;
+  updateStaff: (id: string, data: Partial<Staff>) => Promise<void>;
   deleteStaff: (id: string, onDeleted?: () => void) => Promise<void>;
   totalPages: () => number;
 }
 
-// --- Store Definition ---
 export const useStaffStore = create<StaffState>((set, get) => {
   const fetchStaffDebounced = debounce((page?: number, search?: string) => {
     get().fetchStaff(page, search);
   }, 300);
+
+  const normalizePayload = (payload: StaffPayload): StaffPayload => ({
+    ...payload,
+    salary: payload.salary != null ? String(payload.salary) : "",
+    hireDate: payload.hireDate != null ? String(payload.hireDate) : "",
+    department: payload.department ?? "",
+    classId: payload.classId ?? "",
+  });
 
   return {
     staffList: [],
@@ -78,8 +83,16 @@ export const useStaffStore = create<StaffState>((set, get) => {
     page: 1,
     perPage: 10,
     search: "",
-    loading: false,
-    error: null,
+
+    fetchingStaff: false,
+    fetchStaffError: null,
+    creatingStaff: false,
+    createStaffError: null,
+    updatingStaff: false,
+    updateStaffError: null,
+    deletingStaff: false,
+    deleteStaffError: null,
+
     cache: {},
 
     setPage: (page) => set({ page }),
@@ -97,7 +110,7 @@ export const useStaffStore = create<StaffState>((set, get) => {
         set({ staffList: cached, page });
         return;
       }
-      set({ loading: true, error: null });
+      set({ fetchingStaff: true, fetchStaffError: null });
       try {
         const data = await apiClient<{ staffList: Staff[]; total: number; page: number }>(
           `/api/staff?search=${encodeURIComponent(search)}&page=${page}&perPage=${get().perPage}`
@@ -109,16 +122,16 @@ export const useStaffStore = create<StaffState>((set, get) => {
           cache: search === "" ? { ...state.cache, [page]: data.staffList } : state.cache,
         }));
       } catch (err: any) {
-        set({ error: err?.message || "Failed to fetch staff" });
+        set({ fetchStaffError: err?.message || "Failed to fetch staff" });
       } finally {
-        set({ loading: false });
+        set({ fetchingStaff: false });
       }
     },
 
     fetchStaffDebounced,
 
     fetchStaffById: async (id: string) => {
-      set({ loading: true, error: null });
+      set({ fetchingStaff: true, fetchStaffError: null });
       try {
         const existing = get().staffList.find((s) => s.id === id);
         if (existing) {
@@ -128,43 +141,24 @@ export const useStaffStore = create<StaffState>((set, get) => {
 
         const fetched = await apiClient<Staff>(`/api/staff/${id}`);
         set({ selectedStaff: fetched });
-        set((state) => ({
-          staffList: [fetched, ...state.staffList.filter((s) => s.id !== id)],
-        }));
+        set((state) => ({ staffList: [fetched, ...state.staffList.filter((s) => s.id !== id)] }));
         return fetched;
       } catch (err: any) {
-        set({ error: err?.message || "Failed to fetch staff by id" });
+        set({ fetchStaffError: err?.message || "Failed to fetch staff by id" });
         return null;
       } finally {
-        set({ loading: false });
+        set({ fetchingStaff: false });
       }
     },
 
-    // -------------------- Step 1: Create User --------------------
-    createUser: async ({ name, email, password, Role  }) => {
-      set({ loading: true, error: null });
-      try {
-        const userRes = await apiClient<User>("/api/users", {
-          method: "POST",
-          body: JSON.stringify({ name, email, password , Role }),
-        });
-        if (!userRes?.id) throw new Error("Failed to create user");
-        return userRes;
-      } catch (err: any) {
-        set({ error: err?.error?.message || err?.message || "Failed to create user" });
-        return null;
-      } finally {
-        set({ loading: false });
-      }
-    },
-
-    // -------------------- Step 2: Create Staff Record --------------------
     createStaffRecord: async (staffPayload) => {
-      set({ loading: true, error: null });
+      if (!staffPayload.userId) throw new Error("Missing userId for staff creation");
+      set({ creatingStaff: true, createStaffError: null });
       try {
+        const payload = normalizePayload(staffPayload);
         const newStaff = await apiClient<Staff>("/api/staff", {
           method: "POST",
-          body: JSON.stringify(staffPayload),
+          body: JSON.stringify(payload),
         });
         set((state) => ({
           staffList: [newStaff, ...state.staffList],
@@ -172,33 +166,38 @@ export const useStaffStore = create<StaffState>((set, get) => {
         }));
         return newStaff;
       } catch (err: any) {
-        set({ error: err?.error?.message || err?.message || "Failed to create staff record" });
+        set({ createStaffError: err?.message || "Failed to create staff" });
         return null;
       } finally {
-        set({ loading: false });
+        set({ creatingStaff: false });
       }
     },
 
-    updateStaff: async (id: string, data: Partial<Staff>) => {
+    updateStaff: async (id, data) => {
+      set({ updatingStaff: true, updateStaffError: null });
+      const normalized = {
+        ...data,
+        salary: data.salary != null ? String(data.salary) : "",
+        hireDate: data.hireDate != null ? String(data.hireDate) : "",
+      };
       set((state) => ({
-        staffList: state.staffList.map((s) => (s.id === id ? { ...s, ...data } : s)),
-        selectedStaff:
-          state.selectedStaff?.id === id ? { ...state.selectedStaff, ...data } : state.selectedStaff,
+        staffList: state.staffList.map((s) => (s.id === id ? { ...s, ...normalized } : s)),
+        selectedStaff: state.selectedStaff?.id === id ? { ...state.selectedStaff, ...normalized } : state.selectedStaff,
       }));
       try {
-        await apiClient(`/api/staff/${id}`, { method: "PUT", body: JSON.stringify(data) });
+        await apiClient(`/api/staff/${id}`, { method: "PUT", body: JSON.stringify(normalized) });
       } catch (err: any) {
-        set({ error: err?.message || "Failed to update staff" });
+        set({ updateStaffError: err?.message || "Failed to update staff" });
         get().fetchStaff();
+      } finally {
+        set({ updatingStaff: false });
       }
     },
 
-    deleteStaff: async (id: string, onDeleted?: () => void) => {
-      set({ loading: true, error: null });
+    deleteStaff: async (id, onDeleted) => {
+      set({ deletingStaff: true, deleteStaffError: null });
       try {
-        const res = await apiClient<{ success: boolean; error?: any }>(`/api/staff/${id}`, {
-          method: "DELETE",
-        });
+        const res = await apiClient<{ success: boolean; error?: any }>(`/api/staff/${id}`, { method: "DELETE" });
         if (res.success) {
           set((state) => ({
             staffList: state.staffList.filter((s) => s.id !== id),
@@ -210,12 +209,12 @@ export const useStaffStore = create<StaffState>((set, get) => {
           }));
           if (onDeleted) onDeleted();
         } else {
-          set({ error: res.error?.message || "Failed to delete staff" });
+          set({ deleteStaffError: res.error?.message || "Failed to delete staff" });
         }
       } catch (err: any) {
-        set({ error: err?.message || "Failed to delete staff" });
+        set({ deleteStaffError: err?.message || "Failed to delete staff" });
       } finally {
-        set({ loading: false });
+        set({ deletingStaff: false });
       }
     },
 

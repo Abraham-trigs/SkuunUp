@@ -30,7 +30,7 @@ export default function AttendanceTrendChart({
           <Line
             type="monotone"
             dataKey="attendance"
-            stroke="#facc15"
+            stroke="#dd0000"
             strokeWidth={2}
           />
         </LineChart>

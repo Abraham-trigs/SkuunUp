@@ -5,7 +5,7 @@ export const API_ENDPOINTS = {
   disbursement: "/api/disbursement",
   attendance: "/api/attendance",
   staff: "/api/staff",
-  users: "/api/users", // <-- add this
+  users: "/api/users", 
   auth: {
     login: "/api/auth/login",
     me: "/api/auth/me",

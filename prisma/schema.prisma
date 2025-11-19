@@ -43,13 +43,15 @@ model School {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users      User[]
-  classes    Class[]
-  buses      Bus[]
-  finances   Finance[]
-  activities Activity[]
-  resources  Resource[]
-  Book       Book[]
+  users            User[]
+  classes          Class[]
+  buses            Bus[]
+  finances         Finance[]
+  activities       Activity[]
+  resources        Resource[]
+  Book             Book[]
+  applications     Application[]
+  StaffApplication StaffApplication[]
 }
 
 model User {
@@ -70,6 +72,117 @@ model User {
   createdSubjects Subject[]
 }
 
+// prisma/application.prisma
+// Models to capture student admission application form data with indexes.
+
+model Application {
+  id        String  @id @default(cuid())
+  studentId String  @unique
+  student   Student @relation(fields: [studentId], references: [id])
+  schoolId  String
+  school    School  @relation(fields: [schoolId], references: [id])
+
+  // Step 1: Student Personal Info
+  surname        String
+  firstName      String
+  otherNames     String?
+  dateOfBirth    DateTime
+  nationality    String
+  sex            String
+  languages      String[]
+  grade          String
+  mothersTongue  String
+  religion       String
+  denomination   String?
+  hometown       String
+  region         String
+  profilePicture String? // ✅ added profile picture URL
+
+  // Step 2: Home & Contact Info
+  wardLivesWith           String
+  numberOfSiblings        Int?
+  siblingsOlder           Int?
+  siblingsYounger         Int?
+  postalAddress           String
+  residentialAddress      String
+  wardMobile              String?
+  wardEmail               String?
+  emergencyContact        String
+  emergencyMedicalContact String?
+
+  // Step 3: Medical Info
+  medicalSummary    String?
+  bloodType         String?
+  specialDisability String?
+
+  // Step 4: Declaration & Submission
+  feesAcknowledged  Boolean   @default(false)
+  declarationSigned Boolean   @default(false)
+  signature         String?
+  submissionDate    DateTime? @default(now())
+
+  // Step 5: Office use
+  classification String?
+  submittedBy    String?
+  receivedBy     String?
+  receivedDate   DateTime?
+  remarks        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  previousSchools PreviousSchool[]
+  familyMembers   FamilyMember[]
+
+  admissionPaymentId String? // optional link to payment
+  admissionPayment   AdmissionPayment? @relation(fields: [admissionPaymentId], references: [id])
+
+  @@index([schoolId])
+  @@index([grade])
+  @@index([submissionDate])
+  @@index([feesAcknowledged])
+  @@index([schoolId, grade])
+  @@index([submissionDate, feesAcknowledged])
+}
+
+model PreviousSchool {
+  id            String      @id @default(cuid())
+  application   Application @relation(fields: [applicationId], references: [id])
+  applicationId String
+  name          String
+  location      String
+  startDate     DateTime
+  endDate       DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId])
+}
+
+model FamilyMember {
+  id                 String      @id @default(cuid())
+  application        Application @relation(fields: [applicationId], references: [id])
+  applicationId      String
+  relation           String // Father / Mother / Guardian
+  name               String
+  postalAddress      String
+  residentialAddress String
+  phone              String?
+  email              String?
+  occupation         String?
+  workplace          String?
+  religion           String?
+  isAlive            Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId])
+  @@index([relation])
+  @@index([name])
+}
+
 model Student {
   id         String   @id @default(cuid())
   userId     String   @unique
@@ -86,7 +199,8 @@ model Student {
   attendances  StudentAttendance[]
   borrows      Borrow[]
 
-  subjects Subject[] @relation("StudentSubjects") // many-to-many with Subject
+  subjects    Subject[]    @relation("StudentSubjects") // many-to-many with Subject
+  application Application?
 }
 
 model Class {
@@ -120,6 +234,9 @@ model Subject {
   staff    Staff[]   @relation("StaffSubjects")
   students Student[] @relation("StudentSubjects") // many-to-many
   classes  Class[]   @relation("ClassSubjects") // many-to-many
+
+  // Many-to-many relation with StaffApplication
+  staffApplications StaffApplication[] @relation("StaffApplicationSubjects")
 }
 
 model Exam {
@@ -137,29 +254,110 @@ model Exam {
   updatedAt DateTime @updatedAt
 }
 
-model Staff {
-  id           String      @id @default(cuid())
-  userId       String      @unique
-  user         User        @relation(fields: [userId], references: [id])
-  classId      String?
-  class        Class?      @relation(fields: [classId], references: [id])
-  position     String?
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  salary       Float?
-  hireDate     DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+model StaffApplication {
+  id       String  @id @default(cuid())
+  staffId  String? @unique
+  staff    Staff?  @relation(fields: [staffId], references: [id])
+  schoolId String
+  school   School  @relation(fields: [schoolId], references: [id])
 
-  subjects    Subject[]         @relation("StaffSubjects") // optional: subjects they teach
-  attendances StaffAttendance[]
+  // Personal Info
+  surname        String
+  firstName      String
+  otherNames     String?
+  dateOfBirth    DateTime
+  nationality    String
+  sex            String
+  languages      String[]
+  maritalStatus  String?
+  religion       String
+  denomination   String?
+  hometown       String
+  region         String
+  profilePicture String? // ✅ added profile picture URL
+
+  // Contact Info
+  residentialAddress String
+  postalAddress      String
+  mobile             String?
+  email              String?
+  emergencyContact   String
+  nextOfKin          String?
+
+  // Professional Info
+  position       String
+  departmentId   String?
+  department     Department?   @relation(fields: [departmentId], references: [id])
+  subjects       Subject[]     @relation("StaffApplicationSubjects")
+  hireDate       DateTime?
+  salary         Float?
+  qualifications String?
+  previousJobs   PreviousJob[]
+
+  // Medical Info
+  bloodType         String?
+  medicalConditions String?
+  specialDisability String?
+
+  // Declaration & Office Use
+  declarationSigned Boolean  @default(false)
+  signature         String?
+  submissionDate    DateTime @default(now())
+  classification    String?
+  submittedBy       String?
+  receivedBy        String?
+  remarks           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([schoolId])
+  @@index([position])
+  @@index([submissionDate])
+  @@index([departmentId])
+}
+
+model PreviousJob {
+  id                 String           @id @default(cuid())
+  staffApplication   StaffApplication @relation(fields: [staffApplicationId], references: [id])
+  staffApplicationId String
+  company            String
+  role               String
+  startDate          DateTime
+  endDate            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([staffApplicationId])
+}
+
+model Staff {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  classId   String?
+  class     Class?    @relation(fields: [classId], references: [id])
+  position  String?
+  salary    Float?
+  hireDate  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  department   Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+
+  subjects         Subject[]         @relation("StaffSubjects") // optional: subjects they teach
+  attendances      StaffAttendance[]
+  StaffApplication StaffApplication?
 }
 
 model Department {
-  id           String         @id @default(cuid())
-  name         String         @unique
-  staff        Staff[]
-  LibraryStaff LibraryStaff[]
+  id               String             @id @default(cuid())
+  name             String             @unique
+  staff            Staff[]
+  LibraryStaff     LibraryStaff[]
+  StaffApplication StaffApplication[]
 }
 
 enum AttendanceStatus {
@@ -198,14 +396,15 @@ model StaffAttendance {
 }
 
 model Parent {
-  id        String   @id @default(cuid())
-  studentId String
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  name      String
-  email     String   @unique
-  phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  name           String
+  email          String   @unique
+  phone          String?
+  profilePicture String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // prisma/library.prisma
@@ -282,6 +481,7 @@ enum FinanceType {
 }
 
 enum FeeType {
+  ADMISSION
   TUITION
   EXAM
   LAB
@@ -290,6 +490,22 @@ enum FeeType {
   TRANSPORT
   UNIFORM
   OTHER
+}
+
+model AdmissionPayment {
+  id          String        @id @default(cuid())
+  studentId   String
+  schoolId    String
+  amount      Float
+  pinCode     String        @unique
+  used        Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  Application Application[]
+
+  @@index([studentId])
+  @@index([schoolId])
+  @@index([used])
 }
 
 //FINANCE 

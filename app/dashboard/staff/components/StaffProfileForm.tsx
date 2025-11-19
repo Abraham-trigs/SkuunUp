@@ -1,62 +1,68 @@
-// src/components/StaffStepForm.tsx
 "use client";
 
 import React, { useState, useMemo } from "react";
+import toast from "react-hot-toast";
 import {
   positionRoleMap,
   inferDepartmentFromPosition,
   requiresClass,
   inferRoleFromPosition,
 } from "@/lib/api/constants/roleInference";
+import { useUserStore } from "@/app/store/useUserStore";
+import { useStaffStore } from "@/app/store/useStaffStore";
 
-interface UserStepData {
+interface UserFormData {
+  id?: string;
   name: string;
   email: string;
   password: string;
-  role?: string;
+  role: string;
 }
 
-interface StaffStepData {
+interface StaffFormData {
   position: string;
-  department?: string;
-  classId?: string;
-  salary?: number;
-  hireDate?: string;
+  department: string;
+  classId: string;
+  salary: string;
+  hireDate: string;
 }
 
-interface StaffStepFormProps {
-  onSuccess: (data: { user: UserStepData; staff: StaffStepData }) => void;
-}
+export default function StaffStepForm() {
+  const createUser = useUserStore((state) => state.createUser);
+  const deleteUser = useUserStore((state) => state.deleteUser);
+  const createStaffRecord = useStaffStore((state) => state.createStaffRecord);
 
-export default function StaffStepForm({ onSuccess }: StaffStepFormProps) {
   const [step, setStep] = useState(1);
-  const [userData, setUserData] = useState<UserStepData>({
+
+  const [userData, setUserData] = useState<UserFormData>({
     name: "",
     email: "",
     password: "",
+    role: "",
   });
-  const [staffData, setStaffData] = useState<StaffStepData>({
+
+  const [staffData, setStaffData] = useState<StaffFormData>({
     position: "",
     department: "",
     classId: "",
-    salary: undefined,
+    salary: "",
     hireDate: "",
   });
+
+  const [step1Loading, setStep1Loading] = useState(false);
+  const [step1Error, setStep1Error] = useState<string | null>(null);
+  const [step2Loading, setStep2Loading] = useState(false);
+  const [step2Error, setStep2Error] = useState<string | null>(null);
 
   const positionOptions = useMemo(() => Object.keys(positionRoleMap), []);
 
   const isStep1Valid = userData.name && userData.email && userData.password;
   const isStep2Valid =
     staffData.position &&
-    (!requiresClass(staffData.position) || staffData.classId);
+    (!requiresClass(staffData.position) || staffData.classId) &&
+    !!userData.id;
 
-  const handleNext = () => {
-    if (!isStep1Valid) return alert("Please fill all user fields");
-    setStep(2);
-  };
-
-  const handlePrev = () => setStep(1);
-
+  // ------------------- Handlers -------------------
   const handleUserChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUserData({ ...userData, [e.target.name]: e.target.value });
   };
@@ -65,23 +71,122 @@ export default function StaffStepForm({ onSuccess }: StaffStepFormProps) {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    let newStaff = { ...staffData, [name]: value };
+    let updated = { ...staffData, [name]: value };
 
     if (name === "position") {
-      newStaff.department = inferDepartmentFromPosition(value);
-      if (!requiresClass(value)) newStaff.classId = "";
+      updated.department = inferDepartmentFromPosition(value);
+      if (!requiresClass(value)) updated.classId = "";
     }
 
-    setStaffData(newStaff);
+    setStaffData(updated);
   };
 
-  const handleSubmit = () => {
+  const handleNext = async () => {
+    if (!isStep1Valid) return setStep1Error("Please fill all user fields");
+    setStep1Error(null);
+    setStep1Loading(true);
+
+    try {
+      const newUser = await createUser({
+        name: userData.name,
+        email: userData.email,
+        password: userData.password,
+      });
+
+      if (!newUser?.id) throw new Error("User creation failed");
+
+      setUserData({
+        ...userData,
+        id: newUser.id,
+        role: newUser.role || inferRoleFromPosition(staffData.position),
+      });
+
+      setStep(2);
+    } catch (err: any) {
+      setStep1Error(err?.message || "Failed to create user");
+    } finally {
+      setStep1Loading(false);
+    }
+  };
+
+  const handlePrev = () => setStep(1);
+
+  const handleSubmit = async () => {
     if (!isStep2Valid)
-      return alert("Please select a position and class (if required)");
-    const role = inferRoleFromPosition(staffData.position);
-    onSuccess({ user: { ...userData, role }, staff: staffData });
+      return setStep2Error(
+        "Please select a position, class (if required), and ensure user is created"
+      );
+
+    setStep2Error(null);
+    setStep2Loading(true);
+
+    const prevUserData = { ...userData }; // for undo
+    try {
+      const newStaff = await createStaffRecord({
+        userId: userData.id!,
+        position: staffData.position,
+        department: staffData.department || "",
+        classId: staffData.classId || "",
+        salary: staffData.salary || "",
+        hireDate: staffData.hireDate || "",
+      });
+
+      if (!newStaff) throw new Error("Staff creation failed");
+
+      toast.success("User and staff created successfully!");
+
+      // Reset form
+      resetForm();
+    } catch (err: any) {
+      setStep2Error(err?.message || "Failed to create staff");
+
+      // Rollback user if staff creation fails
+      if (userData.id) {
+        try {
+          await deleteUser(userData.id);
+          toast(
+            (t) => (
+              <span>
+                User rolled back due to staff creation failure.
+                <button
+                  className="ml-2 underline"
+                  onClick={async () => {
+                    await createUser({
+                      name: prevUserData.name,
+                      email: prevUserData.email,
+                      password: prevUserData.password,
+                    });
+                    toast.dismiss(t.id);
+                  }}
+                >
+                  Undo
+                </button>
+              </span>
+            ),
+            { duration: 10000 }
+          );
+        } catch (rollbackErr: any) {
+          console.error("Failed to rollback user:", rollbackErr);
+        }
+      }
+    } finally {
+      setStep2Loading(false);
+    }
   };
 
+  const resetForm = () => {
+    setUserData({ name: "", email: "", password: "", role: "" });
+    setStaffData({
+      position: "",
+      department: "",
+      classId: "",
+      salary: "",
+      hireDate: "",
+    });
+    setStep(1);
+  };
+
+  // ------------------- Render -------------------
   return (
     <div className="p-4 max-w-md mx-auto">
       {/* Step Indicator */}
@@ -102,9 +207,10 @@ export default function StaffStepForm({ onSuccess }: StaffStepFormProps) {
         </div>
       </div>
 
-      {/* Step 1: User */}
+      {/* Step 1 */}
       {step === 1 && (
         <div className="space-y-4">
+          {step1Error && <div className="text-red-600">{step1Error}</div>}
           <input
             type="text"
             name="name"
@@ -136,16 +242,17 @@ export default function StaffStepForm({ onSuccess }: StaffStepFormProps) {
                 : "bg-gray-400 cursor-not-allowed"
             }`}
             onClick={handleNext}
-            disabled={!isStep1Valid}
+            disabled={!isStep1Valid || step1Loading}
           >
-            Next
+            {step1Loading ? "Creating user..." : "Next"}
           </button>
         </div>
       )}
 
-      {/* Step 2: Staff */}
+      {/* Step 2 */}
       {step === 2 && (
         <div className="space-y-4">
+          {step2Error && <div className="text-red-600">{step2Error}</div>}
           <select
             name="position"
             value={staffData.position}
@@ -183,7 +290,7 @@ export default function StaffStepForm({ onSuccess }: StaffStepFormProps) {
           <input
             type="number"
             name="salary"
-            value={staffData.salary ?? ""}
+            value={staffData.salary}
             onChange={handleStaffChange}
             placeholder="Salary"
             className="w-full border rounded px-3 py-2"
@@ -198,7 +305,11 @@ export default function StaffStepForm({ onSuccess }: StaffStepFormProps) {
           />
 
           <div className="flex justify-between mt-4">
-            <button className="px-4 py-2 border rounded" onClick={handlePrev}>
+            <button
+              className="px-4 py-2 border rounded"
+              onClick={handlePrev}
+              disabled={step2Loading}
+            >
               Prev
             </button>
             <button
@@ -208,9 +319,9 @@ export default function StaffStepForm({ onSuccess }: StaffStepFormProps) {
                   : "bg-gray-400 cursor-not-allowed"
               }`}
               onClick={handleSubmit}
-              disabled={!isStep2Valid}
+              disabled={!isStep2Valid || step2Loading}
             >
-              Submit
+              {step2Loading ? "Creating staff..." : "Submit"}
             </button>
           </div>
         </div>

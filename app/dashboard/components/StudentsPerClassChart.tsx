@@ -24,7 +24,7 @@ export default function StudentsPerClassChart({
         <XAxis dataKey="className" />
         <YAxis />
         <Tooltip />
-        <Bar dataKey="count" fill="#facc15" />
+        <Bar dataKey="count" fill="#dd0000" />
       </BarChart>
     </ResponsiveContainer>
   );

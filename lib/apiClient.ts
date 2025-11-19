@@ -13,7 +13,6 @@ export async function apiClient<T>(
   const { auth = true, showSuccess, showError, successMessage, ...rest } = options;
 
   try {
-    // auto stringify body for JSON requests
     if (rest.body && typeof rest.body !== "string") {
       rest.body = JSON.stringify(rest.body);
     }
@@ -25,10 +24,20 @@ export async function apiClient<T>(
     });
 
     const text = await res.text();
-    const data = text ? JSON.parse(text) : null;
+    let data: any = null;
+
+    // Try parsing JSON but fallback gracefully
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch (parseErr) {
+      // If HTML or invalid JSON, wrap in an error
+      throw new Error(
+        `Server returned invalid JSON: ${text.slice(0, 200)}`
+      );
+    }
 
     if (!res.ok) {
-      const errorMessage = data?.error || text || "API request failed";
+      const errorMessage = data?.error || text || `API request failed: ${res.status}`;
       if (showError) notify.error(errorMessage);
       throw new Error(errorMessage);
     }

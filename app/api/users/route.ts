@@ -1,40 +1,35 @@
 // app/api/users/route.ts
-// Purpose: User creation and listing API, school-scoped, hashed passwords, Zod validation.
+// Purpose: User-only API (no staff), handles creation, listing, pagination, search
 
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { userCreateSchema } from "@/lib/validation/userSchemas";
-import { cookieUser } from "@/lib/cookieUser";
-import { z } from "zod";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db.ts";
+import { cookieUser } from "@/lib/cookieUser.ts";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 
 // ------------------- Zod schemas -------------------
 const userQuerySchema = z.object({
   search: z.string().optional(),
-  role: z.string().optional(),
   page: z.coerce.number().min(1).optional().default(1),
   limit: z.coerce.number().min(1).max(100).optional().default(20),
 });
 
-// ------------------- Design reasoning -------------------
-// - Creates only User, no Staff creation.
-// - Passwords hashed for security.
-// - School context ensures users only manage their own school data.
-// - Zod validates query params and request body.
-// - Supports pagination and search for large datasets.
+const createUserSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Valid email required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  role: z.string().default("STUDENT"),
+  busId: z.string().nullable().optional(),
+});
 
-// ------------------- Structure -------------------
-// Exports:
-// POST -> create user only
-// GET -> list users scoped to school, with optional staff info included for frontend convenience
-
-export async function POST(req: Request) {
+// ------------------- POST: Create User -------------------
+export async function POST(req: NextRequest) {
   try {
     const currentUser = await cookieUser();
     if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const parsed = userCreateSchema.parse(body);
+    const parsed = createUserSchema.parse(body);
 
     const existing = await prisma.user.findUnique({ where: { email: parsed.email } });
     if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 400 });
@@ -45,8 +40,8 @@ export async function POST(req: Request) {
       name: parsed.name,
       email: parsed.email,
       password: hashedPassword,
-      role: parsed.role, // optional, can be undefined
-      busId: parsed.role === "TRANSPORT" ? parsed.busId : null,
+      role: parsed.role,
+      busId: parsed.busId || null,
       schoolId: currentUser.school?.id,
     };
 
@@ -54,11 +49,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json(createdUser, { status: 201 });
   } catch (err: any) {
+    console.error("POST /api/users error:", err);
     return NextResponse.json({ error: err.message || "Server error" }, { status: 400 });
   }
 }
 
-export async function GET(req: Request) {
+// ------------------- GET: List Users -------------------
+export async function GET(req: NextRequest) {
   try {
     const currentUser = await cookieUser();
     if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -66,7 +63,6 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const queryParsed = userQuerySchema.parse({
       search: url.searchParams.get("search") || undefined,
-      role: url.searchParams.get("role") || undefined,
       page: url.searchParams.get("page") || undefined,
       limit: url.searchParams.get("limit") || undefined,
     });
@@ -74,7 +70,6 @@ export async function GET(req: Request) {
     const skip = (queryParsed.page - 1) * queryParsed.limit;
 
     const where: any = { schoolId: currentUser.school?.id };
-    if (queryParsed.role) where.role = queryParsed.role;
     if (queryParsed.search) {
       where.OR = [
         { name: { contains: queryParsed.search, mode: "insensitive" } },
@@ -88,7 +83,6 @@ export async function GET(req: Request) {
         skip,
         take: queryParsed.limit,
         orderBy: { createdAt: "desc" },
-        include: { staff: true }, // optional, for frontend display only
       }),
       prisma.user.count({ where }),
     ]);
@@ -103,6 +97,7 @@ export async function GET(req: Request) {
       },
     });
   } catch (err: any) {
+    console.error("GET /api/users error:", err);
     return NextResponse.json({ error: err.message || "Server error" }, { status: 400 });
   }
 }

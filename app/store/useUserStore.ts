@@ -1,8 +1,8 @@
 // src/stores/useUserStore.ts
-// Purpose: Zustand store for managing users and their associated staff, fully integrated with API, search, pagination, error handling, and optimistic updates.
+"use client";
 
 import { create } from "zustand";
-import { apiClient } from "../../lib/apiClient.ts";
+import { apiClient } from "@/lib/apiClient";
 import { z } from "zod";
 
 // ------------------- Zod schemas -------------------
@@ -11,20 +11,10 @@ const userSchema = z.object({
   name: z.string(),
   email: z.string().email(),
   role: z.string(),
-  busId: z.string().nullable(),
+  busId: z.string().nullable().optional(),
   schoolId: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  staff: z
-    .object({
-      id: z.string(),
-      role: z.string(),
-      position: z.string().nullable(),
-      departmentId: z.string().nullable(),
-      salary: z.number().nullable(),
-      hireDate: z.string().nullable(),
-    })
-    .nullable(),
 });
 
 const userListResponseSchema = z.object({
@@ -37,32 +27,8 @@ const userListResponseSchema = z.object({
   }),
 });
 
-// ------------------- Design reasoning -------------------
-// - Centralized user state including staff info for frontend convenience.
-// - Pagination, search, and filtering handled server-side.
-// - Optimistic updates for create/update/delete actions.
-// - Full Zod validation ensures type safety and prevents frontend errors.
-// - Uses apiClient wrapper for consistent error/success notifications.
-
-// ------------------- Structure -------------------
-// Exports: useUserStore hook
-// State:
-//   users -> array of users with staff
-//   pagination -> pagination info
-//   search, page, limit -> query state
-// Actions:
-//   fetchUsers, createUser, updateUser, deleteUser, setSearch, setPage
-
-interface Staff {
-  id: string;
-  role: string;
-  position?: string | null;
-  departmentId?: string | null;
-  salary?: number | null;
-  hireDate?: string | null;
-}
-
-interface User {
+// ------------------- Types -------------------
+export interface User {
   id: string;
   name: string;
   email: string;
@@ -71,14 +37,20 @@ interface User {
   schoolId: string;
   createdAt: string;
   updatedAt: string;
-  staff?: Staff | null;
 }
 
-interface Pagination {
+export interface Pagination {
   total: number;
   page: number;
   limit: number;
   pages: number;
+}
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  password: string;
+  role?: string;
 }
 
 interface UserStore {
@@ -89,13 +61,14 @@ interface UserStore {
   limit: number;
 
   fetchUsers: () => Promise<void>;
-  createUser: (payload: Partial<User>) => Promise<User>;
+  createUser: (payload: CreateUserPayload) => Promise<User>;
   updateUser: (id: string, payload: Partial<User>) => Promise<User>;
   deleteUser: (id: string) => Promise<void>;
   setSearch: (value: string) => void;
   setPage: (value: number) => void;
 }
 
+// ------------------- Store -------------------
 export const useUserStore = create<UserStore>((set, get) => ({
   users: [],
   pagination: { total: 0, page: 1, limit: 20, pages: 1 },
@@ -106,10 +79,11 @@ export const useUserStore = create<UserStore>((set, get) => ({
   setSearch: (value: string) => set({ search: value, page: 1 }),
   setPage: (value: number) => set({ page: value }),
 
+  // ------------------- Fetch Users -------------------
   fetchUsers: async () => {
     const { search, page, limit } = get();
     try {
-      const res = await apiClient<typeof userListResponseSchema>({
+      const res = await apiClient({
         url: `/api/users?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`,
         method: "GET",
         auth: true,
@@ -123,18 +97,17 @@ export const useUserStore = create<UserStore>((set, get) => ({
     }
   },
 
-  createUser: async (payload) => {
+  // ------------------- Create User -------------------
+  createUser: async (payload: CreateUserPayload) => {
     try {
       const res = await apiClient<User>({
         url: "/api/users",
         method: "POST",
         body: payload,
-        showSuccess: true,
-        successMessage: "User created successfully",
+        auth: true,
       });
-      const parsed = userSchema.parse(res);
 
-      // Optimistic update
+      const parsed = userSchema.parse(res);
       set((state) => ({ users: [parsed, ...state.users] }));
       return parsed;
     } catch (err: any) {
@@ -143,6 +116,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
     }
   },
 
+  // ------------------- Update User -------------------
   updateUser: async (id, payload) => {
     try {
       const res = await apiClient<User>({
@@ -152,8 +126,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
         showSuccess: true,
         successMessage: "User updated successfully",
       });
-      const parsed = userSchema.parse(res);
 
+      const parsed = userSchema.parse(res);
       set((state) => ({
         users: state.users.map((u) => (u.id === id ? parsed : u)),
       }));
@@ -164,6 +138,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
     }
   },
 
+  // ------------------- Delete User -------------------
   deleteUser: async (id) => {
     try {
       await apiClient<{ message: string }>({
@@ -172,22 +147,10 @@ export const useUserStore = create<UserStore>((set, get) => ({
         showSuccess: true,
         successMessage: "User deleted successfully",
       });
-      set((state) => ({
-        users: state.users.filter((u) => u.id !== id),
-      }));
+      set((state) => ({ users: state.users.filter((u) => u.id !== id) }));
     } catch (err: any) {
       console.error("deleteUser error:", err.message);
       throw err;
     }
   },
 }));
-
-// ------------------- Implementation guidance -------------------
-// import { useUserStore } from "@/stores/useUserStore";
-// const { users, fetchUsers, createUser } = useUserStore();
-// use fetchUsers() on component mount, call createUser(payload) on form submit.
-
-// ------------------- Scalability insight -------------------
-// - Can extend to fetch related entities like Class, Department, or Subjects.
-// - Supports server-side filtering and sorting by adding query params to fetchUsers.
-// - Can add optimistic UI updates for Staff subfields (position, salary, hireDate) without changing API structure.
