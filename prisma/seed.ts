@@ -1,21 +1,70 @@
 // prisma/seed.ts
-import { PrismaClient, Role, FinanceType, FeeType, AttendanceStatus } from "@prisma/client";
+import {
+  PrismaClient,
+  Role,
+  FinanceType,
+  FeeType,
+} from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 // Helpers
-const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+const randInt = (min: number, max: number) =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
 const randPick = <T>(arr: T[]) => arr[randInt(0, arr.length - 1)];
-const randomPastDate = () => new Date(Date.now() - randInt(0, 365) * 24 * 60 * 60 * 1000);
-const randomScore = (maxScore: number) => Math.floor(Math.random() * (maxScore * 0.5) + maxScore * 0.5);
+const randomPastDate = () =>
+  new Date(Date.now() - randInt(0, 365) * 24 * 60 * 60 * 1000);
+
+// Ghana School Classes
+const GHANA_CLASSES = [
+   { name: "Nursery 1", grade: "N1" },
+  { name: "Nursery 2", grade: "N2" },
+
+  // KG
+  { name: "KG 1", grade: "KG1" },
+  { name: "KG 2", grade: "KG2" },
+
+  // Primary (Basic School)
+  { name: "Basic 1", grade: "B1" },
+  { name: "Basic 2", grade: "B2" },
+  { name: "Basic 3", grade: "B3" },
+  { name: "Basic 4", grade: "B4" },
+  { name: "Basic 5", grade: "B5" },
+  { name: "Basic 6", grade: "B6" },
+
+  // JHS
+  { name: "JHS 1", grade: "JHS1" },
+  { name: "JHS 2", grade: "JHS2" },
+  { name: "JHS 3", grade: "JHS3" },
+
+  // SHS
+  { name: "SHS 1", grade: "SHS1" },
+  { name: "SHS 2", grade: "SHS2" },
+  { name: "SHS 3", grade: "SHS3" },
+];
 
 async function main() {
   // ---------- SCHOOLS ----------
   const schoolsData = [
-    { name: "Ford School Limited", domain: "fordschool.com", email: "fordschoolltd@fordschool.com", address: "123 Ford Rd" },
-    { name: "Sunrise Academy", domain: "sunriseacademy.com", email: "info@sunriseacademy.com", address: "1 Sunrise Ave" },
-    { name: "Greenfield High", domain: "greenfieldhigh.com", email: "contact@greenfieldhigh.com", address: "42 Greenfield St" },
+    {
+      name: "Ford School Limited",
+      domain: "fordschool.com",
+      email: "fordschoolltd@fordschool.com",
+      address: "123 Ford Rd",
+    },
+    {
+      name: "Sunrise Academy",
+      domain: "sunriseacademy.com",
+      email: "info@sunriseacademy.com",
+      address: "1 Sunrise Ave",
+    },
+    {
+      name: "Greenfield High",
+      domain: "greenfieldhigh.com",
+      email: "contact@greenfieldhigh.com",
+      address: "42 Greenfield St",
+    },
   ];
 
   const schools = [];
@@ -28,23 +77,28 @@ async function main() {
     schools.push(school);
   }
 
-  // ---------- ADMIN / PRINCIPAL ACCOUNTS ----------
+  // ---------- ADMIN / PRINCIPAL ----------
   for (const school of schools) {
-    const admins = [
+    const adminUsers = [
       { name: "Super Admin", email: `admin@${school.domain}`, role: Role.ADMIN },
       { name: "Principal", email: `principal@${school.domain}`, role: Role.PRINCIPAL },
     ];
-    for (const a of admins) {
+
+    for (const a of adminUsers) {
       const password = await bcrypt.hash("admin123", 10);
       await prisma.user.upsert({
         where: { email: a.email },
         update: {},
-        create: { ...a, password, schoolId: school.id },
+        create: {
+          ...a,
+          password,
+          schoolId: school.id,
+        },
       });
     }
   }
 
-  // ---------- COMMON SUBJECTS ----------
+  // ---------- SUBJECTS ----------
   const subjectsData = [
     { name: "Mathematics", code: "MATH101" },
     { name: "English", code: "ENG101" },
@@ -63,79 +117,92 @@ async function main() {
     subjects.push(sub);
   }
 
-  // ---------- SEED PER SCHOOL ----------
+  // ---------- PER SCHOOL SEEDING ----------
   for (const school of schools) {
-    // CLASSES
-    const classNames = ["Grade 1", "Grade 2", "Grade 3"];
+    // ---------- CLASSES ----------
     const classes = [];
-    for (const cname of classNames) {
-      const cls = await prisma.class.upsert({
-        where: { name_schoolId: { name: cname, schoolId: school.id } },
-        update: {},
-        create: { name: cname, schoolId: school.id },
-      });
-      classes.push(cls);
 
-      // Connect subjects
+    for (const cls of GHANA_CLASSES) {
+      const created = await prisma.class.upsert({
+        where: {
+          name_schoolId: { name: cls.name, schoolId: school.id },
+        },
+        update: {},
+        create: {
+          name: cls.name,
+          grade: cls.grade,
+          schoolId: school.id,
+        },
+      });
+      classes.push(created);
+
+      // Attach subjects
       await prisma.class.update({
-        where: { id: cls.id },
-        data: { subjects: { connect: subjects.map(s => ({ id: s.id })) } },
+        where: { id: created.id },
+        data: {
+          subjects: { connect: subjects.map((s) => ({ id: s.id })) },
+        },
       });
     }
 
-    // TEACHERS & STAFF
+    // ---------- STAFF ----------
     const staffUsers = [];
+
     for (let i = 1; i <= 5; i++) {
       const password = await bcrypt.hash("teacher123", 10);
-      const userEmail = `teacher${i}@${school.domain}`;
-      const user = await prisma.user.upsert({
-        where: { email: userEmail },
+      const email = `teacher${i}@${school.domain}`;
+
+      const teacherUser = await prisma.user.upsert({
+        where: { email },
         update: {},
         create: {
           name: `Teacher ${i} ${school.name}`,
-          email: userEmail,
+          email,
           password,
           role: Role.TEACHER,
           schoolId: school.id,
         },
       });
-      staffUsers.push(user);
+
+      staffUsers.push(teacherUser);
     }
 
     for (const user of staffUsers) {
       const cls = randPick(classes);
       const sub = randPick(subjects);
+
       await prisma.staff.upsert({
         where: { userId: user.id },
         update: {
           classId: cls.id,
-          subjects: { connect: [{ id: sub.id }] },
-          position: "Teacher",
           hireDate: randomPastDate(),
           salary: randInt(2000, 5000),
+          subjects: { connect: [{ id: sub.id }] },
         },
         create: {
           userId: user.id,
           classId: cls.id,
-          subjects: { connect: [{ id: sub.id }] },
           position: "Teacher",
           hireDate: randomPastDate(),
           salary: randInt(2000, 5000),
+          subjects: { connect: [{ id: sub.id }] },
         },
       });
     }
 
-    // STUDENTS & PARENTS
+    // ---------- STUDENTS & PARENTS ----------
     const students = [];
+
     for (let i = 1; i <= 20; i++) {
+      const email = `student${i}@${school.domain}`;
       const password = await bcrypt.hash("student123", 10);
-      const studentEmail = `student${i}@${school.domain}`;
+
       const user = await prisma.user.upsert({
-        where: { email: studentEmail },
+        where: { email },
         update: {},
         create: {
           name: `Student ${i} ${school.name}`,
-          email: studentEmail,
+          email,
           password,
           role: Role.STUDENT,
           schoolId: school.id,
@@ -143,27 +210,39 @@ async function main() {
       });
 
       const cls = randPick(classes);
+
+      // ✅ Fix: provide `user` and `school` relations for student
       const student = await prisma.student.upsert({
         where: { userId: user.id },
-        update: {},
-        create: { userId: user.id, classId: cls.id, enrolledAt: randomPastDate() },
+        update: {
+          classId: cls.id,
+          enrolledAt: randomPastDate(),
+          user: { connect: { id: user.id } },
+          school: { connect: { id: school.id } },
+        },
+        create: {
+          user: { connect: { id: user.id } },
+          school: { connect: { id: school.id } },
+          classId: cls.id,
+          enrolledAt: randomPastDate(),
+        },
       });
+
+      students.push(student);
 
       await prisma.parent.upsert({
         where: { email: `parent${i}@${school.domain}` },
         update: {},
         create: {
-          studentId: student.id,
           name: `Parent ${i} ${school.name}`,
           email: `parent${i}@${school.domain}`,
-          phone: `555-${randInt(1000, 9999)}`,
+          phone: `055${randInt(1000000, 9999999)}`,
+          studentId: student.id,
         },
       });
-
-      students.push(student);
     }
 
-    // FINANCES
+    // ---------- FINANCES ----------
     for (const student of students) {
       await prisma.transaction.create({
         data: {
@@ -186,16 +265,13 @@ async function main() {
         date: randomPastDate(),
       },
     });
-
-    // RESOURCES, PURCHASES, ACTIVITIES, BUSES, LIBRARY, ATTENDANCE, EXAMS
-    // ... (similar logic from previous seed but adapted with upserts and school domains)
   }
 
-  console.log("✅ Seed complete with idempotent staff, admin, Ford School included.");
+  console.log("✅ Seed complete with Ghana class system, students, staff, and upserts.");
 }
 
 main()
-  .catch(e => {
+  .catch((e) => {
     console.error(e);
     process.exit(1);
   })

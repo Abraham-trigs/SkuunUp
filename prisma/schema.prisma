@@ -52,6 +52,7 @@ model School {
   Book             Book[]
   applications     Application[]
   StaffApplication StaffApplication[]
+  Student          Student[]
 }
 
 model User {
@@ -70,19 +71,41 @@ model User {
   LibraryStaff LibraryStaff?
 
   createdSubjects Subject[]
+
+  application Application? @relation("UserApplication")
 }
 
 // prisma/application.prisma
 // Models to capture student admission application form data with indexes.
 
+model Student {
+  id       String @id @default(cuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id])
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  subjects          Subject[]           @relation("StudentSubjects")
+  application       Application?        @relation("StudentApplication")
+  Class             Class?              @relation(fields: [classId], references: [id])
+  classId           String?
+  Exam              Exam[]
+  StudentAttendance StudentAttendance[]
+  Parent            Parent[]
+  Borrow            Borrow[]
+  Transaction       Transaction[]
+  Purchase          Purchase[]
+}
+
 model Application {
   id        String  @id @default(cuid())
   studentId String  @unique
-  student   Student @relation(fields: [studentId], references: [id])
+  student   Student @relation("StudentApplication", fields: [studentId], references: [id])
+  userId    String  @unique
+  user      User    @relation("UserApplication", fields: [userId], references: [id])
   schoolId  String
   school    School  @relation(fields: [schoolId], references: [id])
 
-  // Step 1: Student Personal Info
   surname        String
   firstName      String
   otherNames     String?
@@ -96,9 +119,8 @@ model Application {
   denomination   String?
   hometown       String
   region         String
-  profilePicture String? // ✅ added profile picture URL
+  profilePicture String?
 
-  // Step 2: Home & Contact Info
   wardLivesWith           String
   numberOfSiblings        Int?
   siblingsOlder           Int?
@@ -110,18 +132,15 @@ model Application {
   emergencyContact        String
   emergencyMedicalContact String?
 
-  // Step 3: Medical Info
   medicalSummary    String?
   bloodType         String?
   specialDisability String?
 
-  // Step 4: Declaration & Submission
   feesAcknowledged  Boolean   @default(false)
   declarationSigned Boolean   @default(false)
   signature         String?
   submissionDate    DateTime? @default(now())
 
-  // Step 5: Office use
   classification String?
   submittedBy    String?
   receivedBy     String?
@@ -134,7 +153,7 @@ model Application {
   previousSchools PreviousSchool[]
   familyMembers   FamilyMember[]
 
-  admissionPaymentId String? // optional link to payment
+  admissionPaymentId String?
   admissionPayment   AdmissionPayment? @relation(fields: [admissionPaymentId], references: [id])
 
   @@index([schoolId])
@@ -181,26 +200,6 @@ model FamilyMember {
   @@index([applicationId])
   @@index([relation])
   @@index([name])
-}
-
-model Student {
-  id         String   @id @default(cuid())
-  userId     String   @unique
-  user       User     @relation(fields: [userId], references: [id])
-  classId    String?
-  class      Class?   @relation(fields: [classId], references: [id])
-  enrolledAt DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  exams        Exam[]
-  parents      Parent[]
-  transactions Transaction[]
-  purchases    Purchase[]
-  attendances  StudentAttendance[]
-  borrows      Borrow[]
-
-  subjects    Subject[]    @relation("StudentSubjects") // many-to-many with Subject
-  application Application?
 }
 
 model Class {

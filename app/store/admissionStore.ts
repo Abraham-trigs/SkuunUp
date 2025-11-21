@@ -1,11 +1,12 @@
+// app/store/admissionStore.ts
+"use client";
+
 import { create } from "zustand";
 import { z } from "zod";
-import { debounce } from "lodash";
+import axios from "axios";
 
-// =====================
-// TypeScript interfaces
-// =====================
-export interface FamilyMember {
+// ------------------ Types ------------------
+export type FamilyMember = {
   relation: string;
   name: string;
   postalAddress: string;
@@ -16,112 +17,52 @@ export interface FamilyMember {
   workplace?: string;
   religion?: string;
   isAlive?: boolean;
-}
+};
 
-export interface PreviousSchool {
+export type PreviousSchool = {
   name: string;
   location: string;
   startDate: string;
   endDate: string;
-}
+};
 
-export interface AdmissionFormData {
-  studentId: string;
-  classId: string;
-  surname: string;
-  firstName: string;
-  otherNames?: string;
-  dateOfBirth: string;
-  nationality: string;
-  sex: string;
-  languages: string[];
-  mothersTongue: string;
-  religion: string;
-  denomination?: string;
-  hometown: string;
-  region: string;
-  profilePicture?: string;
-  wardLivesWith: string;
-  numberOfSiblings?: number;
-  siblingsOlder?: number;
-  siblingsYounger?: number;
-  postalAddress: string;
-  residentialAddress: string;
-  wardMobile?: string;
-  wardEmail?: string;
-  emergencyContact: string;
-  emergencyMedicalContact?: string;
-  medicalSummary?: string;
-  bloodType?: string;
-  specialDisability?: string;
-  feesAcknowledged: boolean;
-  declarationSigned: boolean;
-  signature?: string;
-  classification?: string;
-  submittedBy?: string;
-  receivedBy?: string;
-  receivedDate?: string;
-  remarks?: string;
-  previousSchools?: PreviousSchool[];
-  familyMembers?: FamilyMember[];
-  admissionPin: string;
-  grade?: string; // synced from selected class
-}
-
-export interface SchoolClass {
+export type SchoolClass = {
   id: string;
   name: string;
   grade: string;
-}
+};
 
-// =====================
-// Zod validation schema
-// =====================
-export const FamilyMemberSchema = z.object({
-  relation: z.string().min(1),
+// ------------------ Form Schema ------------------
+export const admissionFormSchema = z.object({
+  admissionPin: z.string(),
+  studentId: z.string().optional(),
   name: z.string().min(1),
-  postalAddress: z.string().min(1),
-  residentialAddress: z.string().min(1),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
-  occupation: z.string().optional(),
-  workplace: z.string().optional(),
-  religion: z.string().optional(),
-  isAlive: z.boolean().optional(),
-});
-
-export const PreviousSchoolSchema = z.object({
-  name: z.string().min(1),
-  location: z.string().min(1),
-  startDate: z.string().min(1),
-  endDate: z.string().min(1),
-});
-
-export const AdmissionFormSchema = z.object({
-  studentId: z.string().min(1),
-  classId: z.string().min(1),
-  surname: z.string().min(1),
-  firstName: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(6),
+  role: z.string().default("STUDENT"),
+  classId: z.string().optional(),
+  surname: z.string().optional(),
+  firstName: z.string().optional(),
   otherNames: z.string().optional(),
-  dateOfBirth: z.string().min(1),
-  nationality: z.string().min(1),
-  sex: z.string().min(1),
-  languages: z.array(z.string()),
-  mothersTongue: z.string().min(1),
-  religion: z.string().min(1),
+  dateOfBirth: z.string().optional(),
+  nationality: z.string().optional(),
+  sex: z.string().optional(),
+  languages: z.array(z.string()).optional(),
+  mothersTongue: z.string().optional(),
+  religion: z.string().optional(),
   denomination: z.string().optional(),
-  hometown: z.string().min(1),
-  region: z.string().min(1),
+  hometown: z.string().optional(),
+  region: z.string().optional(),
   profilePicture: z.string().optional(),
-  wardLivesWith: z.string().min(1),
+  wardLivesWith: z.string().optional(),
   numberOfSiblings: z.number().optional(),
   siblingsOlder: z.number().optional(),
   siblingsYounger: z.number().optional(),
-  postalAddress: z.string().min(1),
-  residentialAddress: z.string().min(1),
+  postalAddress: z.string().optional(),
+  residentialAddress: z.string().optional(),
   wardMobile: z.string().optional(),
-  wardEmail: z.string().email().optional(),
-  emergencyContact: z.string().min(1),
+  wardEmail: z.string().optional(),
+  emergencyContact: z.string().optional(),
   emergencyMedicalContact: z.string().optional(),
   medicalSummary: z.string().optional(),
   bloodType: z.string().optional(),
@@ -134,43 +75,37 @@ export const AdmissionFormSchema = z.object({
   receivedBy: z.string().optional(),
   receivedDate: z.string().optional(),
   remarks: z.string().optional(),
-  previousSchools: z.array(PreviousSchoolSchema).optional(),
-  familyMembers: z.array(FamilyMemberSchema).optional(),
-  admissionPin: z.string().min(1),
+  previousSchools: z.array(z.any()).optional(),
+  familyMembers: z.array(z.any()).optional(),
 });
 
-// =====================
-// Zustand store
-// =====================
+// ------------------ Store ------------------
 interface AdmissionStore {
-  formData: AdmissionFormData;
+  formData: z.infer<typeof admissionFormSchema>;
   availableClasses: SchoolClass[];
-  errors: Record<string, string[]>;
   loading: boolean;
+  errors: Record<string, string[]>;
   submitted: boolean;
-  currentStep: number;
-  totalSteps: number;
+  userCreated: boolean;
 
-  // actions
-  setField: <K extends keyof AdmissionFormData>(field: K, value: AdmissionFormData[K]) => void;
-  addFamilyMember: (member: FamilyMember) => void;
-  removeFamilyMember: (index: number) => void;
-  addPreviousSchool: (school: PreviousSchool) => void;
-  removePreviousSchool: (index: number) => void;
-  fetchClasses: (search?: string) => Promise<void>;
+  setField: (field: string, value: any) => void;
+  createUser: () => Promise<boolean>;
   submitForm: () => Promise<void>;
-  resetForm: () => void;
-
-  // multi-step
-  nextStep: () => void;
-  prevStep: () => void;
-  goToStep: (step: number) => void;
-  validateCurrentStep: () => boolean;
+  fetchClasses: () => Promise<void>;
+  addFamilyMember: (member: FamilyMember) => void;
+  removeFamilyMember: (idx: number) => void;
+  addPreviousSchool: (school: PreviousSchool) => void;
+  removePreviousSchool: (idx: number) => void;
 }
 
 export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   formData: {
-    studentId: "",
+    admissionPin: "",
+    name: "",
+    email: "",
+    password: "",
+    role: "STUDENT",
+    studentId: undefined,
     classId: "",
     surname: "",
     firstName: "",
@@ -208,168 +143,86 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     remarks: "",
     previousSchools: [],
     familyMembers: [],
-    admissionPin: "",
-    grade: "",
   },
   availableClasses: [],
-  errors: {},
   loading: false,
+  errors: {},
   submitted: false,
-  currentStep: 1,
-  totalSteps: 4,
+  userCreated: false,
 
-  setField: (field, value) => set((state) => {
-    const newFormData = { ...state.formData, [field]: value };
-    if (field === "classId") {
-      const cls = state.availableClasses.find(c => c.id === value);
-      if (cls) newFormData.grade = cls.name;
-    }
-    return { formData: newFormData };
-  }),
+  setField: (field, value) => {
+    set((state) => {
+      const keys = field.split(".");
+      let obj: any = state.formData;
+      for (let i = 0; i < keys.length - 1; i++) {
+        obj = obj[keys[i]];
+      }
+      obj[keys[keys.length - 1]] = value;
+      return { formData: state.formData };
+    });
+  },
 
-  addFamilyMember: (member) => set((state) => ({ formData: { ...state.formData, familyMembers: [...(state.formData.familyMembers || []), member] } })),
-  removeFamilyMember: (index) => set((state) => {
-    const fm = [...(state.formData.familyMembers || [])];
-    fm.splice(index, 1);
-    return { formData: { ...state.formData, familyMembers: fm } };
-  }),
-
-  addPreviousSchool: (school) => set((state) => ({ formData: { ...state.formData, previousSchools: [...(state.formData.previousSchools || []), school] } })),
-  removePreviousSchool: (index) => set((state) => {
-    const ps = [...(state.formData.previousSchools || [])];
-    ps.splice(index, 1);
-    return { formData: { ...state.formData, previousSchools: ps } };
-  }),
-
-  fetchClasses: debounce(async (search = "") => {
-    set({ loading: true });
+  createUser: async () => {
+    set({ loading: true, errors: {} });
     try {
-      const res = await fetch(`/api/classes?search=${encodeURIComponent(search)}`);
-      const data = await res.json();
-      set({ availableClasses: data.classes || [], loading: false });
-    } catch {
-      set({ availableClasses: [], loading: false });
+      const { name, email, password, role } = get().formData;
+      const res = await axios.post("/api/users", { name, email, password, role });
+      if (res.status === 201) {
+        // Store studentId from created user
+        set({ formData: { ...get().formData, studentId: res.data.id }, userCreated: true });
+        return true;
+      }
+    } catch (err: any) {
+      if (err.response?.data?.error) set({ errors: { createUser: [err.response.data.error] } });
+    } finally {
+      set({ loading: false });
     }
-  }, 300),
+    return false;
+  },
 
   submitForm: async () => {
-    set({ loading: true, errors: {}, submitted: false });
+    if (!get().userCreated) {
+      set({ errors: { submitForm: ["User must be created first."] } });
+      return;
+    }
+    set({ loading: true, errors: {} });
     try {
-      AdmissionFormSchema.parse(get().formData);
-      const res = await fetch("/api/admissions", { method: "POST", body: JSON.stringify(get().formData), headers: { "Content-Type": "application/json" } });
-      const result = await res.json();
-      if (!res.ok) set({ errors: result.error || {}, loading: false });
-      else set({ submitted: true, loading: false });
+      const body = get().formData;
+      await axios.post("/api/admissions", body);
+      set({ submitted: true });
     } catch (err: any) {
-      if (err instanceof z.ZodError) set({ errors: err.flatten().fieldErrors, loading: false });
-      else set({ errors: { form: [err.message] }, loading: false });
+      if (err.response?.data?.error) set({ errors: { submitForm: [err.response.data.error] } });
+    } finally {
+      set({ loading: false });
     }
   },
 
-  resetForm: () => set({
-    formData: {
-      studentId: "",
-      classId: "",
-      surname: "",
-      firstName: "",
-      otherNames: "",
-      dateOfBirth: "",
-      nationality: "",
-      sex: "",
-      languages: [],
-      mothersTongue: "",
-      religion: "",
-      denomination: "",
-      hometown: "",
-      region: "",
-      profilePicture: "",
-      wardLivesWith: "",
-      numberOfSiblings: undefined,
-      siblingsOlder: undefined,
-      siblingsYounger: undefined,
-      postalAddress: "",
-      residentialAddress: "",
-      wardMobile: "",
-      wardEmail: "",
-      emergencyContact: "",
-      emergencyMedicalContact: "",
-      medicalSummary: "",
-      bloodType: "",
-      specialDisability: "",
-      feesAcknowledged: false,
-      declarationSigned: false,
-      signature: "",
-      classification: "",
-      submittedBy: "",
-      receivedBy: "",
-      receivedDate: "",
-      remarks: "",
-      previousSchools: [],
-      familyMembers: [],
-      admissionPin: "",
-      grade: "",
-    },
-    errors: {},
-    loading: false,
-    submitted: false,
-    currentStep: 1,
-  }),
-
-  nextStep: () => set((state) => ({ currentStep: Math.min(state.currentStep + 1, state.totalSteps) })),
-  prevStep: () => set((state) => ({ currentStep: Math.max(state.currentStep - 1, 1) })),
-  goToStep: (step: number) => set({ currentStep: Math.min(Math.max(step, 1), get().totalSteps) }),
-
-  validateCurrentStep: () => {
-    const { currentStep, formData } = get();
+  fetchClasses: async () => {
     try {
-      switch (currentStep) {
-        case 1:
-          z.object({
-            surname: z.string().min(1),
-            firstName: z.string().min(1),
-            dateOfBirth: z.string().min(1),
-            sex: z.string().min(1),
-          }).parse(formData);
-          break;
-        case 2:
-          z.array(FamilyMemberSchema).parse(formData.familyMembers || []);
-          break;
-        case 3:
-          z.array(PreviousSchoolSchema).parse(formData.previousSchools || []);
-          break;
-        case 4:
-          z.string().min(1).parse(formData.admissionPin);
-          break;
-      }
-      return true;
-    } catch {
-      return false;
+      const res = await axios.get("/api/classes");
+      set({ availableClasses: res.data || [] });
+    } catch (err) {
+      console.error("Error fetching classes", err);
     }
+  },
+
+  addFamilyMember: (member) => {
+    set((state) => ({ formData: { ...state.formData, familyMembers: [...(state.formData.familyMembers || []), member] } }));
+  },
+  removeFamilyMember: (idx) => {
+    set((state) => ({
+      formData: {
+        ...state.formData,
+        familyMembers: state.formData.familyMembers?.filter((_, i) => i !== idx),
+      },
+    }));
+  },
+  addPreviousSchool: (school) => {
+    set((state) => ({ formData: { ...state.formData, previousSchools: [...(state.formData.previousSchools || []), school] } }));
+  },
+  removePreviousSchool: (idx) => {
+    set((state) => ({
+      formData: { ...state.formData, previousSchools: state.formData.previousSchools?.filter((_, i) => i !== idx) },
+    }));
   },
 }));
-
-// =====================
-// Design reasoning
-// =====================
-// Centralized multi-step store keeps state, validation, class selection, and submission logic consistent. Grade auto-sync ensures reporting clarity. Nested arrays (familyMembers, previousSchools) directly managed for user-friendly UX.
-
-// =====================
-// Structure
-// =====================
-// - useAdmissionStore: main Zustand store hook
-// - Actions: setField, add/remove nested items, fetchClasses, submitForm, resetForm
-// - Multi-step: nextStep, prevStep, goToStep, validateCurrentStep
-// - State: formData, availableClasses, errors, loading, submitted, currentStep, totalSteps
-
-// =====================
-// Implementation guidance
-// =====================
-// - Bind form fields to store.setField
-// - Call store.fetchClasses() on component mount/search
-// - Validate step before moving to nextStep using validateCurrentStep()
-// - Call submitForm() at final step to persist admission
-
-// =====================
-// Scalability insight
-// =====================
-// - Supports dynamic multi-step forms, autosave drafts, notifications, and caching available classes per grade. Easily extendable for more nested objects or step-based conditional logic.

@@ -1,5 +1,6 @@
 // app/api/admissions/route.ts
-// Purpose: Handle student admission creation with Application, Student, PreviousSchool, FamilyMember, class assignment, and AdmissionPayment verification, scoped to authenticated user's school
+// Purpose: Handle student admission creation after the user has been created
+// Full transactional integrity: Application + PreviousSchools + FamilyMembers + AdmissionPayment
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -7,16 +8,7 @@ import { z } from "zod";
 import { cookieUser } from "@/lib/cookieUser";
 
 // =====================
-// Design reasoning
-// =====================
-// 1. Frontend provides the selected classId, keeping backend simple and flexible.
-// 2. Fully scoped to authenticated user's school to prevent multi-tenant leakage.
-// 3. Transactionally creates Application + Student + PreviousSchools + FamilyMembers + marks payment used.
-// 4. Zod ensures all fields, including classId, are validated before DB operations.
-// 5. Errors returned in clear JSON shape for frontend UX handling.
-
-// =====================
-// Input validation schema
+// Input validation schemas
 // =====================
 const FamilyMemberSchema = z.object({
   relation: z.string(),
@@ -38,9 +30,9 @@ const PreviousSchoolSchema = z.object({
   endDate: z.string(),
 });
 
-const ApplicationSchema = z.object({
-  studentId: z.string(),
-  classId: z.string(), // new: frontend provides selected class
+const AdmissionSchema = z.object({
+  studentId: z.string(), // must match existing User.id from Step 1
+  classId: z.string(),
   surname: z.string(),
   firstName: z.string(),
   otherNames: z.string().optional(),
@@ -81,24 +73,21 @@ const ApplicationSchema = z.object({
 });
 
 // =====================
-// Route Handler
+// POST: Create Admission
 // =====================
 export async function POST(req: NextRequest) {
   try {
-    // Retrieve authenticated user
     const authUser = await cookieUser();
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const data = ApplicationSchema.parse(body);
+    const data = AdmissionSchema.parse(body);
 
-    // Verify class exists and belongs to the school
+    // Verify class exists and belongs to user's school
     const selectedClass = await prisma.class.findFirst({
-      where: { id: data.classId, schoolId: authUser.Application?.schoolId || undefined },
+      where: { id: data.classId, schoolId: authUser.schoolDomain ? authUser.Application?.schoolId : undefined },
     });
-    if (!selectedClass) {
-      return NextResponse.json({ error: "Invalid class selected" }, { status: 400 });
-    }
+    if (!selectedClass) return NextResponse.json({ error: "Invalid class selected" }, { status: 400 });
 
     // Verify AdmissionPayment pinCode
     const payment = await prisma.admissionPayment.findFirst({
@@ -109,11 +98,9 @@ export async function POST(req: NextRequest) {
         schoolId: authUser.Application?.schoolId || undefined,
       },
     });
-    if (!payment) {
-      return NextResponse.json({ error: "Invalid or already used admission PIN" }, { status: 400 });
-    }
+    if (!payment) return NextResponse.json({ error: "Invalid or already used admission PIN" }, { status: 400 });
 
-    // Transaction: create Application + Student + PreviousSchools + FamilyMembers + mark payment used
+    // Transaction: Application + PreviousSchools + FamilyMembers + mark payment used
     const result = await prisma.$transaction(async (tx) => {
       const app = await tx.application.create({
         data: {
@@ -126,7 +113,7 @@ export async function POST(req: NextRequest) {
           nationality: data.nationality,
           sex: data.sex,
           languages: data.languages,
-          grade: selectedClass.name, // using class name as grade representation
+          grade: selectedClass.name,
           mothersTongue: data.mothersTongue,
           religion: data.religion,
           denomination: data.denomination,
@@ -160,11 +147,11 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Create Student linked to the Application and class
+      // Create Student entry linked to the user and class
       await tx.student.create({
         data: {
           id: data.studentId,
-          userId: data.studentId, // assumes studentId is also the User.id
+          userId: data.studentId,
           classId: selectedClass.id,
           enrolledAt: new Date(),
           application: { connect: { id: app.id } },
@@ -182,22 +169,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, application: result }, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors }, { status: 400 });
-    }
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 });
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
 }
-
-// =====================
-// Implementation guidance
-// =====================
-// - Frontend provides `classId` from available class list API.
-// - Transaction ensures Application + Student + AdmissionPayment consistency.
-// - Keep `grade` synced from class.name for clarity in reporting.
-
-// =====================
-// Scalability insight
-// =====================
-// - Can extend to include section, automatic notifications, or class capacity checks.
-// - Frontend-driven selection allows easy changes without backend schema modifications.
