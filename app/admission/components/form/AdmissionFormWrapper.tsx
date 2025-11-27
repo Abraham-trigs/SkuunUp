@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import { useUserStore } from "@/app/store/useUserStore.ts";
+import { validateStep } from "@/app/admission/components/form/schemas/stepValidators.ts";
+
 import Step1CreateUser from "./Step1CreateUser.tsx";
 import Step2PersonalDetails from "./Step2PersonalDetails.tsx";
 import Step3FamilyMembers from "./Step3FamilyMembers.tsx";
@@ -12,110 +14,80 @@ import Step6ClassAdmission from "./Step6Class.tsx";
 import Step7Declaration from "./Step7Declaration.tsx";
 
 const steps = [
-  { id: 1, label: "Create User" },
-  { id: 2, label: "Personal Details" },
-  { id: 3, label: "Family Members" },
-  { id: 4, label: "Previous Schools" },
-  { id: 5, label: "Medical & Special Needs" },
-  { id: 6, label: "Class & Admission" },
-  { id: 7, label: "Declaration & Submit" },
+  {
+    id: 1,
+    label: "Create User",
+    fields: ["firstName", "surname", "wardEmail", "password"],
+  },
+  { id: 2, label: "Personal Details", fields: ["dob", "gender", "address"] },
+  { id: 3, label: "Family Members", fields: ["fatherName", "motherName"] },
+  { id: 4, label: "Previous Schools", fields: ["lastSchool", "yearCompleted"] },
+  { id: 5, label: "Medical & Special Needs", fields: ["medicalInfo"] },
+  { id: 6, label: "Class & Admission", fields: ["classId"] },
+  { id: 7, label: "Declaration & Submit", fields: ["declarationAccepted"] },
 ];
-
-const stepFields: Record<number, string[]> = {
-  2: [
-    "surname",
-    "firstName",
-    "otherNames",
-    "dateOfBirth",
-    "nationality",
-    "sex",
-    "languages",
-    "mothersTongue",
-    "religion",
-    "denomination",
-    "hometown",
-    "region",
-    "profilePicture",
-    "wardLivesWith",
-    "numberOfSiblings",
-    "siblingsOlder",
-    "siblingsYounger",
-    "postalAddress",
-    "residentialAddress",
-    "wardMobile",
-    "wardEmail",
-    "emergencyContact",
-    "emergencyMedicalContact",
-  ],
-  3: ["familyMembers"],
-  4: ["previousSchools"],
-  5: ["medicalSummary", "bloodType", "specialDisability"],
-  6: ["classId", "classification", "feesAcknowledged"],
-};
 
 export default function MultiStepAdmissionForm() {
   const {
     formData,
     loading,
     errors,
-    submitted,
-    userCreated,
     setField,
     updateAdmission,
     fetchClasses,
+    submitted,
+    setErrors,
   } = useAdmissionStore();
-
   const { createUser } = useUserStore();
-
-  const [currentStep, setCurrentStep] = React.useState(1);
+  const [currentStep, setCurrentStep] = useState(1);
 
   useEffect(() => {
     fetchClasses();
   }, [fetchClasses]);
 
-  const goNext = async () => {
-    // Update backend for steps > 1
-    if (currentStep > 1 && currentStep < steps.length) {
-      const fieldsToUpdate = stepFields[currentStep] || [];
-      const partialUpdate: any = {};
-      fieldsToUpdate.forEach((key) => {
-        partialUpdate[key] = formData[key as keyof typeof formData];
-      });
-      await updateAdmission(partialUpdate);
-    }
-    setCurrentStep((s) => Math.min(s + 1, steps.length));
+  // Check if all fields in current step are filled
+  const isStepFilled = () => {
+    const step = steps.find((s) => s.id === currentStep);
+    if (!step) return false;
+    return step.fields.every((field) => {
+      const value = formData[field];
+      return typeof value === "string"
+        ? value.trim() !== ""
+        : value !== undefined && value !== null;
+    });
   };
 
+  const goNext = () => setCurrentStep((s) => Math.min(s + 1, steps.length));
   const goBack = () => setCurrentStep((s) => Math.max(s - 1, 1));
 
-  // Handle single Next button, including Step 1 user creation
   const handleNext = async () => {
-    if (currentStep === 1) {
-      // Validate Step 1 fields
-      if (
-        !formData.firstName ||
-        !formData.surname ||
-        !formData.wardEmail ||
-        !formData.password
-      )
-        return;
+    // Step validation before sending
+    const { valid, errors: stepErrors } = validateStep(currentStep, formData);
+    if (!valid) {
+      setErrors(stepErrors);
+      return;
+    }
 
+    // Special handling for Step 1: create user
+    if (currentStep === 1) {
       try {
-        const payload = {
+        const user = await createUser({
           name: `${formData.firstName} ${formData.surname}`,
           email: formData.wardEmail,
           password: formData.password,
           role: "STUDENT",
-        };
-        const user = await createUser(payload);
-
-        if (!user) return; // Error handled by store
+        });
+        if (!user) return;
         setField("studentId", user.id);
-        setField("userCreated", true); // Optional if you track separately
       } catch (err) {
         console.error("User creation failed:", err);
         return;
       }
+    }
+
+    // Update backend for steps before final
+    if (currentStep < steps.length) {
+      await updateAdmission(formData, currentStep);
     }
 
     goNext();
@@ -129,7 +101,6 @@ export default function MultiStepAdmissionForm() {
             formData={formData}
             setField={setField}
             errors={errors}
-            loading={loading}
           />
         );
       case 2:
@@ -191,25 +162,20 @@ export default function MultiStepAdmissionForm() {
             {currentStep < steps.length ? (
               <button
                 onClick={handleNext}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
-                aria-label="Go to next step"
-                disabled={
-                  loading ||
-                  (currentStep === 1 &&
-                    (!formData.firstName ||
-                      !formData.surname ||
-                      !formData.wardEmail ||
-                      !formData.password))
-                }
+                disabled={!isStepFilled() || loading}
+                className={`px-4 py-2 rounded transition ${
+                  isStepFilled()
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                }`}
               >
                 {loading && currentStep === 1 ? "Creating..." : "Next"}
               </button>
             ) : (
               <button
-                onClick={() => updateAdmission()}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
+                onClick={async () => await updateAdmission(formData)}
                 disabled={loading || submitted}
-                aria-label="Submit form"
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
               >
                 {loading ? "Submitting..." : submitted ? "Submitted" : "Submit"}
               </button>

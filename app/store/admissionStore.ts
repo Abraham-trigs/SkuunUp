@@ -212,7 +212,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   },
 
   // ------------------ Update Admission ------------------
-updateAdmission: async (updatedFields) => {
+updateAdmission: async (updatedFields, stepNumber?: number) => {
   const studentId = get().formData.studentId;
   if (!studentId) {
     set({ errors: { updateAdmission: ["Student ID missing"] } });
@@ -224,8 +224,20 @@ updateAdmission: async (updatedFields) => {
     const schoolId = useAuthStore.getState().user?.school.id;
     if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
+    // Merge updated fields
     const body = { ...get().formData, ...updatedFields };
-    admissionFormSchema.parse(body); // validate
+
+    // Step-level validation if stepNumber is provided
+    if (stepNumber) {
+      const { valid, errors: stepErrors } = validateStep(stepNumber, body);
+      if (!valid) {
+        set({ errors: stepErrors });
+        return;
+      }
+    } else {
+      // Full form validation as fallback
+      admissionFormSchema.parse(body);
+    }
 
     await axios.put(`${API_ENDPOINTS.admissions}/${studentId}`, body, {
       headers: { "X-School-ID": schoolId },
@@ -234,7 +246,6 @@ updateAdmission: async (updatedFields) => {
     set({ formData: body });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      // Safe handling for ZodError
       const messages = (err.errors || err.issues)?.map((e) => e.message) || ["Validation failed"];
       set({ errors: { updateAdmission: messages } });
     } else {
@@ -248,6 +259,8 @@ updateAdmission: async (updatedFields) => {
     set({ loading: false });
   }
 },
+
+
 
   // ------------------ Fetch Student Admission ------------------
   fetchStudentAdmission: async (studentId) => {
