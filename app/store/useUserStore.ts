@@ -99,23 +99,33 @@ export const useUserStore = create<UserStore>((set, get) => ({
   },
 
   // ------------------- Create User -------------------
-  createUser: async (payload: CreateUserPayload) => {
-    const schoolId = useAuthStore.getState().user?.school.id;
-    if (!schoolId) throw new Error("Unauthorized: School ID missing");
+ createUser: async (payload: CreateUserPayload) => {
+  const schoolId = useAuthStore.getState().user?.school.id;
+  if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
-    try {
-      const res = await axios.post("/api/users", payload, {
-        headers: { "X-School-ID": schoolId },
-      });
+  try {
+    const res = await axios.post("/api/users", payload, {
+      headers: { "X-School-ID": schoolId },
+    });
 
-      const parsed = userSchema.parse(res.data);
-      set((state) => ({ users: [parsed, ...state.users] }));
-      return parsed;
-    } catch (err: any) {
-      console.error("createUser error:", err?.response?.data || err?.message || err);
-      return false;
-    }
-  },
+    const parsed = userSchema.parse(res.data);
+    set((state) => ({ users: [parsed, ...state.users] }));
+    return parsed;
+  } catch (err: any) {
+  const message =
+    err?.response?.data?.error || // your API might return { error: "..." }
+    err?.response?.data?.message ||
+    err?.message ||
+    JSON.stringify(err) || // fallback string
+    "Unknown error";
+
+  console.error("createUser error:", message);
+  return false;
+}
+
+},
+
+
 
   // ------------------- Update User -------------------
   updateUser: async (id, payload) => {

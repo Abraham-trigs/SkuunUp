@@ -61,15 +61,14 @@ export default function MultiStepAdmissionForm() {
   const goBack = () => setCurrentStep((s) => Math.max(s - 1, 1));
 
   const handleNext = async () => {
-    // Step validation before sending
-    const { valid, errors: stepErrors } = validateStep(currentStep, formData);
-    if (!valid) {
-      setErrors(stepErrors);
-      return;
-    }
-
-    // Special handling for Step 1: create user
+    // Step 1: Create user
     if (currentStep === 1) {
+      const { valid, errors: stepErrors } = validateStep(1, formData);
+      if (!valid) {
+        setErrors(stepErrors);
+        return;
+      }
+
       try {
         const user = await createUser({
           name: `${formData.firstName} ${formData.surname}`,
@@ -77,15 +76,30 @@ export default function MultiStepAdmissionForm() {
           password: formData.password,
           role: "STUDENT",
         });
-        if (!user) return;
+
+        if (!user) {
+          // createUser returned false due to error (e.g., email exists)
+          setErrors({ createUser: ["Email already in use"] });
+          return;
+        }
+
         setField("studentId", user.id);
-      } catch (err) {
-        console.error("User creation failed:", err);
+      } catch (err: any) {
+        // Catch unexpected errors
+        console.error("createUser unexpected error:", err);
+        setErrors({ createUser: [err?.message || "Failed to create user"] });
         return;
       }
     }
 
-    // Update backend for steps before final
+    // Validate current step again before sending to backend
+    const { valid, errors: stepErrors } = validateStep(currentStep, formData);
+    if (!valid) {
+      setErrors(stepErrors);
+      return;
+    }
+
+    // Update backend for intermediate steps
     if (currentStep < steps.length) {
       await updateAdmission(formData, currentStep);
     }
