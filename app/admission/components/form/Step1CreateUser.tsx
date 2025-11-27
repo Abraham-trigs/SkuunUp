@@ -29,39 +29,75 @@ export default function Step1CreateUser({
         Step 1: Create User
       </h2>
 
-      <input
-        className="w-full p-2 rounded bg-[var(--background)] text-[var(--ford-primary)]"
-        placeholder="First Name"
-        value={formData.firstName || ""}
-        onChange={(e) => setField("firstName", e.target.value)}
-        aria-label="First Name"
-      />
+      <div className="flex flex-col">
+        <label
+          htmlFor="firstName"
+          className="font-medium text-[var(--ford-primary)]"
+        >
+          First Name
+        </label>
+        <input
+          id="firstName"
+          className="w-full p-2 rounded bg-[var(--background)] text-[var(--ford-primary)]"
+          placeholder="Enter your first name"
+          value={formData.firstName || ""}
+          onChange={(e) => setField("firstName", e.target.value)}
+          aria-label="First Name"
+        />
+      </div>
 
-      <input
-        className="w-full p-2 rounded bg-[var(--background)] text-[var(--ford-primary)]"
-        placeholder="Surname"
-        value={formData.surname || ""}
-        onChange={(e) => setField("surname", e.target.value)}
-        aria-label="Surname"
-      />
+      <div className="flex flex-col">
+        <label
+          htmlFor="surname"
+          className="font-medium text-[var(--ford-primary)]"
+        >
+          Surname
+        </label>
+        <input
+          id="surname"
+          className="w-full p-2 rounded bg-[var(--background)] text-[var(--ford-primary)]"
+          placeholder="Enter your surname"
+          value={formData.surname || ""}
+          onChange={(e) => setField("surname", e.target.value)}
+          aria-label="Surname"
+        />
+      </div>
 
-      <input
-        type="email"
-        className="w-full p-2 rounded bg-[var(--background)] text-[var(--ford-primary)]"
-        placeholder="Ward Email"
-        value={formData.wardEmail || ""}
-        onChange={(e) => setField("wardEmail", e.target.value)}
-        aria-label="Ward Email"
-      />
+      <div className="flex flex-col">
+        <label
+          htmlFor="wardEmail"
+          className="font-medium text-[var(--ford-primary)]"
+        >
+          Ward Email
+        </label>
+        <input
+          type="email"
+          id="wardEmail"
+          className="w-full p-2 rounded bg-[var(--background)] text-[var(--ford-primary)]"
+          placeholder="Enter your email"
+          value={formData.wardEmail || ""}
+          onChange={(e) => setField("wardEmail", e.target.value)}
+          aria-label="Ward Email"
+        />
+      </div>
 
-      <input
-        type="password"
-        className="w-full p-2 rounded bg-[var(--background)] text-[var(--ford-primary)]"
-        placeholder="Password"
-        value={formData.password || ""}
-        onChange={(e) => setField("password", e.target.value)}
-        aria-label="Password"
-      />
+      <div className="flex flex-col">
+        <label
+          htmlFor="password"
+          className="font-medium text-[var(--ford-primary)]"
+        >
+          Password
+        </label>
+        <input
+          type="password"
+          id="password"
+          className="w-full p-2 rounded bg-[var(--background)] text-[var(--ford-primary)]"
+          placeholder="Enter a password"
+          value={formData.password || ""}
+          onChange={(e) => setField("password", e.target.value)}
+          aria-label="Password"
+        />
+      </div>
 
       {errors.createUser && (
         <div className="text-red-600" role="alert" aria-live="assertive">

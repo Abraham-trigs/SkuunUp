@@ -65,10 +65,9 @@ export default function MultiStepAdmissionForm() {
     fetchClasses,
   } = useAdmissionStore();
 
-  const { createUser, markUserCreated } = useUserStore();
+  const { createUser } = useUserStore();
 
   const [currentStep, setCurrentStep] = React.useState(1);
-  const progress = ((currentStep - 1) / (steps.length - 1)) * 100;
 
   useEffect(() => {
     fetchClasses();
@@ -89,24 +88,32 @@ export default function MultiStepAdmissionForm() {
 
   const goBack = () => setCurrentStep((s) => Math.max(s - 1, 1));
 
-  // Single "Next" button handler
+  // Handle single Next button, including Step 1 user creation
   const handleNext = async () => {
     if (currentStep === 1) {
-      if (!formData.firstName || !formData.surname || !formData.wardEmail)
+      // Validate Step 1 fields
+      if (
+        !formData.firstName ||
+        !formData.surname ||
+        !formData.wardEmail ||
+        !formData.password
+      )
         return;
 
       try {
         const payload = {
           name: `${formData.firstName} ${formData.surname}`,
           email: formData.wardEmail,
-          password: formData.password || "default123",
+          password: formData.password,
           role: "STUDENT",
         };
-
         const user = await createUser(payload);
-        if (user?.id) markUserCreated(user.id);
-      } catch (err: any) {
-        console.error("Error creating user:", err);
+
+        if (!user) return; // Error handled by store
+        setField("studentId", user.id);
+        setField("userCreated", true); // Optional if you track separately
+      } catch (err) {
+        console.error("User creation failed:", err);
         return;
       }
     }
@@ -191,7 +198,8 @@ export default function MultiStepAdmissionForm() {
                   (currentStep === 1 &&
                     (!formData.firstName ||
                       !formData.surname ||
-                      !formData.wardEmail))
+                      !formData.wardEmail ||
+                      !formData.password))
                 }
               >
                 {loading && currentStep === 1 ? "Creating..." : "Next"}

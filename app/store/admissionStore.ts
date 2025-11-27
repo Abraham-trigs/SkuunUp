@@ -55,37 +55,40 @@ const PreviousSchoolSchema = z.object({
   endDate: z.string(),
 });
 
-// ------------------ Form Schema ------------------
+// ------------------ Admission Form Schema ------------------
 export const admissionFormSchema = z.object({
   admissionPin: z.string(),
   studentId: z.string().optional(),
-  classId: z.string().optional(),
-  surname: z.string().optional(),
-  firstName: z.string().optional(),
+  classId: z.string(),
+  surname: z.string(),
+  firstName: z.string(),
   otherNames: z.string().optional(),
-  dateOfBirth: z.string().optional(),
-  nationality: z.string().optional(),
-  sex: z.string().optional(),
-  languages: z.array(z.string()).optional(),
-  mothersTongue: z.string().optional(),
-  religion: z.string().optional(),
+  dateOfBirth: z.string(),
+  nationality: z.string(),
+  sex: z.string(),
+  languages: z.array(z.string()),
+  mothersTongue: z.string(),
+  religion: z.string(),
   denomination: z.string().optional(),
-  hometown: z.string().optional(),
-  region: z.string().optional(),
+  hometown: z.string(),
+  region: z.string(),
   profilePicture: z.string().optional(),
-  wardLivesWith: z.string().optional(),
+
+  wardLivesWith: z.string(),
   numberOfSiblings: z.number().optional(),
   siblingsOlder: z.number().optional(),
   siblingsYounger: z.number().optional(),
-  postalAddress: z.string().optional(),
-  residentialAddress: z.string().optional(),
+  postalAddress: z.string(),
+  residentialAddress: z.string(),
   wardMobile: z.string().optional(),
   wardEmail: z.string().optional(),
-  emergencyContact: z.string().optional(),
+  emergencyContact: z.string(),
   emergencyMedicalContact: z.string().optional(),
+
   medicalSummary: z.string().optional(),
   bloodType: z.string().optional(),
   specialDisability: z.string().optional(),
+
   feesAcknowledged: z.boolean().default(false),
   declarationSigned: z.boolean().default(false),
   signature: z.string().optional(),
@@ -94,6 +97,7 @@ export const admissionFormSchema = z.object({
   receivedBy: z.string().optional(),
   receivedDate: z.string().optional(),
   remarks: z.string().optional(),
+
   previousSchools: z.array(PreviousSchoolSchema).optional(),
   familyMembers: z.array(FamilyMemberSchema).optional(),
 });
@@ -124,9 +128,10 @@ interface AdmissionStore {
   loadStudentData: (student: any) => void;
 }
 
-// ------------------ Store ------------------
+// ------------------ Store Implementation ------------------
 export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
-  formData: admissionFormSchema.parse({ admissionPin: "" }),
+  // Use .partial() so missing required fields don't break initialization
+  formData: admissionFormSchema.partial().parse({ admissionPin: "" }),
   availableClasses: [],
   loading: false,
   errors: {},
@@ -187,43 +192,62 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       const schoolId = useAuthStore.getState().user?.school.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
+      // Full validation before submission
+      admissionFormSchema.parse(get().formData);
+
       await axios.post(API_ENDPOINTS.admissions, get().formData, {
         headers: { "X-School-ID": schoolId },
       });
 
       set({ submitted: true });
     } catch (err: any) {
-      set({ errors: { submitForm: [err.response?.data?.error || err.message || "Failed to submit admission"] } });
+      if (err instanceof z.ZodError) {
+        set({ errors: { submitForm: err.errors.map((e) => e.message) } });
+      } else {
+        set({ errors: { submitForm: [err.response?.data?.error || err.message || "Failed to submit admission"] } });
+      }
     } finally {
       set({ loading: false });
     }
   },
 
   // ------------------ Update Admission ------------------
-  updateAdmission: async (updatedFields) => {
-    const studentId = get().formData.studentId;
-    if (!studentId) {
-      set({ errors: { updateAdmission: ["Student ID missing"] } });
-      return;
-    }
+updateAdmission: async (updatedFields) => {
+  const studentId = get().formData.studentId;
+  if (!studentId) {
+    set({ errors: { updateAdmission: ["Student ID missing"] } });
+    return;
+  }
 
-    set({ loading: true, errors: {} });
-    try {
-      const schoolId = useAuthStore.getState().user?.school.id;
-      if (!schoolId) throw new Error("Unauthorized: School ID missing");
+  set({ loading: true, errors: {} });
+  try {
+    const schoolId = useAuthStore.getState().user?.school.id;
+    if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
-      const body = { ...get().formData, ...updatedFields };
-      await axios.put(`${API_ENDPOINTS.admissions}/${studentId}`, body, {
-        headers: { "X-School-ID": schoolId },
+    const body = { ...get().formData, ...updatedFields };
+    admissionFormSchema.parse(body); // validate
+
+    await axios.put(`${API_ENDPOINTS.admissions}/${studentId}`, body, {
+      headers: { "X-School-ID": schoolId },
+    });
+
+    set({ formData: body });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      // Safe handling for ZodError
+      const messages = (err.errors || err.issues)?.map((e) => e.message) || ["Validation failed"];
+      set({ errors: { updateAdmission: messages } });
+    } else {
+      set({
+        errors: {
+          updateAdmission: [err?.response?.data?.error || err?.message || "Failed to update admission"],
+        },
       });
-
-      set({ formData: body });
-    } catch (err: any) {
-      set({ errors: { updateAdmission: [err.response?.data?.error || err.message || "Failed to update admission"] } });
-    } finally {
-      set({ loading: false });
     }
-  },
+  } finally {
+    set({ loading: false });
+  }
+},
 
   // ------------------ Fetch Student Admission ------------------
   fetchStudentAdmission: async (studentId) => {
