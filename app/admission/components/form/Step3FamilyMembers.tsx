@@ -1,7 +1,12 @@
 "use client";
+
 import React from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
+import { z } from "zod";
 import { Step3Schema } from "./schemas/step3Schema.ts";
+
+// Export Step 3 required fields for multi-step validation
+export const Step3Fields = ["familyMembers"];
 
 export default function Step3Family() {
   const {
@@ -42,7 +47,7 @@ export default function Step3Family() {
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-bold text-[var(--ford-primary)]">
-        Family Members
+        Step 3: Family Members
       </h2>
 
       {formData.familyMembers?.map((f, idx) => (

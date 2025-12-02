@@ -1,7 +1,11 @@
 "use client";
 import React from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
+import { z } from "zod";
 import { Step7Schema } from "./schemas/step7Schema.ts";
+
+// Required fields for Step 7
+export const Step7Fields = ["feesAcknowledged", "declarationSigned"];
 
 export default function Step7Declaration() {
   const { formData, setField, errors, setErrors } = useAdmissionStore();

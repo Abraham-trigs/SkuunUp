@@ -4,11 +4,7 @@ import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 export default function Step1CreateUser() {
   const { formData, setField, errors } = useAdmissionStore();
 
-  const getError = (field: string) => errors[field]?.[0];
-
-  // Required fields for this step
-  const requiredFields = ["firstName", "surname", "wardEmail", "password"];
-  const allFilled = requiredFields.every((f) => formData[f]?.trim() !== "");
+  const getError = (field: string) => errors[field]?.[0]; // match stepValidators format
 
   return (
     <div className="space-y-4" aria-labelledby="step1-title">
@@ -19,7 +15,7 @@ export default function Step1CreateUser() {
         Step 1: Create User
       </h2>
 
-      {requiredFields.map((field) => (
+      {["firstName", "surname", "wardEmail", "password"].map((field) => (
         <div key={field} className="flex flex-col">
           <label
             htmlFor={field}
@@ -46,5 +42,3 @@ export default function Step1CreateUser() {
     </div>
   );
 }
-
-export { Step1CreateUser, requiredFields }; // export requiredFields to be used in MultiStep

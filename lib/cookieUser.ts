@@ -3,10 +3,13 @@
 //          preload full school object and optional student/staff applications,
 //          fully scoped to the user's school, with caching for efficiency.
 
+// lib/cookieUser.ts
 import { cookies } from "next/headers";
-import { prisma, Role } from "@/lib/db.ts";
+import { prisma } from "@/lib/db.ts";
+import { Role } from "@prisma/client";       // <-- correct place
 import { verifyJwt } from "@/lib/jwt.ts";
 import { COOKIE_NAME } from "@/lib/cookies.ts";
+
 
 /** TypeScript interface for returned user shape */
 export interface CookieUser {

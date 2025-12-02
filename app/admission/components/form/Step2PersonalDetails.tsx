@@ -1,7 +1,19 @@
 "use client";
+
 import React from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
+import { z } from "zod";
 import { Step2Schema } from "./schemas/step2Schema.ts";
+
+// Export required fields for Step 2
+export const Step2Fields = [
+  "surname",
+  "firstName",
+  "otherNames",
+  "dateOfBirth",
+  "nationality",
+  "sex",
+];
 
 export default function Step2PersonalDetails() {
   const { formData, setField, errors, setErrors } = useAdmissionStore();

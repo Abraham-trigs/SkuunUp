@@ -1,9 +1,14 @@
 "use client";
+
 import React, { useEffect } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
+import { z } from "zod";
 import { Step6Schema } from "./schemas/step6Schema.ts";
 
-export default function Step6Class() {
+// Export required fields for Step 6
+export const Step6Fields = ["classId"];
+
+export default function Step6ClassAdmission() {
   const {
     formData,
     setField,
@@ -48,6 +53,7 @@ export default function Step6Class() {
           </option>
         ))}
       </select>
+
       {errors.updateAdmission?.some((e) => e.includes("classId")) && (
         <p className="text-red-600 text-sm">
           {errors.updateAdmission.find((e) => e.includes("classId"))}

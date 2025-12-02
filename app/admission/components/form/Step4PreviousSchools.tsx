@@ -1,7 +1,13 @@
 "use client";
 import React from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
+import { z } from "zod";
 import { Step4Schema } from "./schemas/step4Schema.ts";
+
+// Export required fields for Step 4
+export const Step4Fields = [
+  "previousSchools", // the entire array is required
+];
 
 export default function Step4PreviousSchools() {
   const {

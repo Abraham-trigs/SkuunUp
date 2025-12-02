@@ -1,17 +1,21 @@
 // lib/db.ts
-import { PrismaClient, Role } from '@prisma/client';
+// Centralized Prisma Client (singleton-safe for dev + production)
 
+import { PrismaClient } from "@prisma/client";
+
+// Prevent multiple instances during Next.js hot reload
 declare global {
+  // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 
 export const prisma =
-  global.prisma ||
+  global.prisma ??
   new PrismaClient({
-    log: ['query', 'error'],
+    log: ["query", "info", "warn", "error"], // optional debugging logs
   });
 
-if (process.env.NODE_ENV !== 'production') global.prisma = prisma;
-
-// Re-export Role enum for use in other files
-export { Role };
+// Cache client in dev environment only
+if (process.env.NODE_ENV !== "production") {
+  global.prisma = prisma;
+}

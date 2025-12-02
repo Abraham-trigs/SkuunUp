@@ -1,7 +1,11 @@
 "use client";
 import React from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
+import { z } from "zod";
 import { Step5Schema } from "./schemas/step5Schema.ts";
+
+// Export required fields for Step 5
+export const Step5Fields = ["medicalSummary", "bloodType", "specialDisability"];
 
 export default function Step5Medical() {
   const { formData, setField, errors, setErrors } = useAdmissionStore();
@@ -19,6 +23,11 @@ export default function Step5Medical() {
     }
   };
 
+  const getError = (field: string) =>
+    errors.updateAdmission?.find((e) =>
+      e.toLowerCase().includes(field.toLowerCase())
+    );
+
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-bold text-[var(--ford-primary)]">
@@ -31,10 +40,8 @@ export default function Step5Medical() {
         value={formData.medicalSummary || ""}
         onChange={(e) => setField("medicalSummary", e.target.value)}
       />
-      {errors.updateAdmission?.some((e) => e.includes("medicalSummary")) && (
-        <p className="text-red-600 text-sm">
-          {errors.updateAdmission.find((e) => e.includes("medicalSummary"))}
-        </p>
+      {getError("medicalSummary") && (
+        <p className="text-red-600 text-sm">{getError("medicalSummary")}</p>
       )}
 
       <input
@@ -43,10 +50,8 @@ export default function Step5Medical() {
         value={formData.bloodType || ""}
         onChange={(e) => setField("bloodType", e.target.value)}
       />
-      {errors.updateAdmission?.some((e) => e.includes("bloodType")) && (
-        <p className="text-red-600 text-sm">
-          {errors.updateAdmission.find((e) => e.includes("bloodType"))}
-        </p>
+      {getError("bloodType") && (
+        <p className="text-red-600 text-sm">{getError("bloodType")}</p>
       )}
 
       <input
@@ -55,10 +60,8 @@ export default function Step5Medical() {
         value={formData.specialDisability || ""}
         onChange={(e) => setField("specialDisability", e.target.value)}
       />
-      {errors.updateAdmission?.some((e) => e.includes("specialDisability")) && (
-        <p className="text-red-600 text-sm">
-          {errors.updateAdmission.find((e) => e.includes("specialDisability"))}
-        </p>
+      {getError("specialDisability") && (
+        <p className="text-red-600 text-sm">{getError("specialDisability")}</p>
       )}
     </div>
   );
