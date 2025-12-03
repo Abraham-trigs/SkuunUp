@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import { useUserStore } from "@/app/store/useUserStore.ts";
-import { validateStep } from "@/app/admission/components/form/schemas/stepValidators.ts";
 
 import Step1CreateUser from "./Step1CreateUser.tsx";
 import Step2PersonalDetails from "./Step2PersonalDetails.tsx";
@@ -12,6 +11,7 @@ import Step4PreviousSchools from "./Step4PreviousSchools.tsx";
 import Step5Medical from "./Step5Medical.tsx";
 import Step6ClassAdmission from "./Step6Class.tsx";
 import Step7Declaration from "./Step7Declaration.tsx";
+import { validateStep } from "./schemas/stepValidators.ts";
 
 const steps = [
   {
@@ -19,12 +19,16 @@ const steps = [
     label: "Create User",
     fields: ["firstName", "surname", "wardEmail", "password"],
   },
-  { id: 2, label: "Personal Details", fields: ["dob", "gender", "address"] },
+  {
+    id: 2,
+    label: "Personal Details",
+    fields: ["dateOfBirth", "sex", "postalAddress"],
+  },
   { id: 3, label: "Family Members", fields: ["fatherName", "motherName"] },
   { id: 4, label: "Previous Schools", fields: ["lastSchool", "yearCompleted"] },
-  { id: 5, label: "Medical & Special Needs", fields: ["medicalInfo"] },
+  { id: 5, label: "Medical & Special Needs", fields: ["medicalSummary"] },
   { id: 6, label: "Class & Admission", fields: ["classId"] },
-  { id: 7, label: "Declaration & Submit", fields: ["declarationAccepted"] },
+  { id: 7, label: "Declaration & Submit", fields: ["declarationSigned"] },
 ];
 
 export default function MultiStepAdmissionForm() {
@@ -38,6 +42,7 @@ export default function MultiStepAdmissionForm() {
     submitted,
     setErrors,
   } = useAdmissionStore();
+
   const { createUser } = useUserStore();
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -45,7 +50,6 @@ export default function MultiStepAdmissionForm() {
     fetchClasses();
   }, [fetchClasses]);
 
-  // Check if all fields in current step are filled
   const isStepFilled = () => {
     const step = steps.find((s) => s.id === currentStep);
     if (!step) return false;
@@ -61,14 +65,13 @@ export default function MultiStepAdmissionForm() {
   const goBack = () => setCurrentStep((s) => Math.max(s - 1, 1));
 
   const handleNext = async () => {
-    // Step 1: Create user
-    if (currentStep === 1) {
-      const { valid, errors: stepErrors } = validateStep(1, formData);
-      if (!valid) {
-        setErrors(stepErrors);
-        return;
-      }
+    const { valid, errors: stepErrors } = validateStep(currentStep, formData);
+    if (!valid) {
+      setErrors(stepErrors);
+      return;
+    }
 
+    if (currentStep === 1) {
       try {
         const user = await createUser({
           name: `${formData.firstName} ${formData.surname}`,
@@ -76,33 +79,18 @@ export default function MultiStepAdmissionForm() {
           password: formData.password,
           role: "STUDENT",
         });
-
         if (!user) {
-          // createUser returned false due to error (e.g., email exists)
           setErrors({ createUser: ["Email already in use"] });
           return;
         }
-
-        setField("studentId", user.id);
       } catch (err: any) {
-        // Catch unexpected errors
-        console.error("createUser unexpected error:", err);
         setErrors({ createUser: [err?.message || "Failed to create user"] });
         return;
       }
     }
 
-    // Validate current step again before sending to backend
-    const { valid, errors: stepErrors } = validateStep(currentStep, formData);
-    if (!valid) {
-      setErrors(stepErrors);
-      return;
-    }
-
-    // Update backend for intermediate steps
-    if (currentStep < steps.length) {
+    if (currentStep < steps.length)
       await updateAdmission(formData, currentStep);
-    }
 
     goNext();
   };
@@ -110,25 +98,19 @@ export default function MultiStepAdmissionForm() {
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return (
-          <Step1CreateUser
-            formData={formData}
-            setField={setField}
-            errors={errors}
-          />
-        );
+        return <Step1CreateUser />;
       case 2:
-        return <Step2PersonalDetails formData={formData} setField={setField} />;
+        return <Step2PersonalDetails />;
       case 3:
-        return <Step3FamilyMembers formData={formData} setField={setField} />;
+        return <Step3FamilyMembers />;
       case 4:
-        return <Step4PreviousSchools formData={formData} setField={setField} />;
+        return <Step4PreviousSchools />;
       case 5:
-        return <Step5Medical formData={formData} setField={setField} />;
+        return <Step5Medical />;
       case 6:
-        return <Step6ClassAdmission formData={formData} setField={setField} />;
+        return <Step6ClassAdmission />;
       case 7:
-        return <Step7Declaration formData={formData} setField={setField} />;
+        return <Step7Declaration />;
       default:
         return null;
     }
@@ -161,7 +143,7 @@ export default function MultiStepAdmissionForm() {
         {/* Current Step */}
         <div className="w-full">{renderStep()}</div>
 
-        {/* Navigation Buttons */}
+        {/* Navigation */}
         <div className="flex justify-between flex-wrap gap-2">
           {currentStep > 1 && (
             <button
@@ -172,6 +154,7 @@ export default function MultiStepAdmissionForm() {
               Back
             </button>
           )}
+
           <div className="flex gap-2 ml-auto">
             {currentStep < steps.length ? (
               <button

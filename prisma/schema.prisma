@@ -57,7 +57,9 @@ model School {
 
 model User {
   id        String   @id @default(cuid())
-  name      String
+  surname   String
+  firstName String
+  otherNames String?
   email     String   @unique
   password  String
   role      Role
@@ -74,6 +76,7 @@ model User {
 
   application Application? @relation("UserApplication")
 }
+
 
 // prisma/application.prisma
 // Models to capture student admission application form data with indexes.

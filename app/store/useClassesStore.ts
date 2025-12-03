@@ -39,17 +39,14 @@ interface ClassesStore {
   fetchStudents: (classId: string) => Promise<void>;
   fetchAttendance: (classId: string, date?: string) => Promise<void>;
 
-  createClass: (name: string) => Promise<{ success: boolean; data?: Class; error?: string }>;
-  updateClass: (id: string, name: string) => Promise<boolean>;
+  createClass: (name: string, grade: string) => Promise<{ success: boolean; data?: Class; error?: string }>;
+  updateClass: (id: string, name?: string, grade?: string) => Promise<boolean>;
   deleteClass: (id: string) => Promise<void>;
   markAttendance: (classId: string, records: AttendanceRecord[], date?: string) => Promise<void>;
 
   selectClass: (cls: Class) => void;
   clearSelectedClass: () => void;
 
-  // -------------------------------
-  // Search, sort, filter actions
-  // -------------------------------
   setSearch: (search: string) => void;
   setSort: (sortBy: "name" | "studentCount" | "createdAt", sortOrder: "asc" | "desc") => void;
   setDateFilter: (date?: string) => void;
@@ -72,9 +69,6 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   dateFilter: undefined,
   cache: {},
 
-  // -------------------------------------
-  // Fetch paginated class list
-  // -------------------------------------
   fetchClasses: async (page = get().page, perPage = get().perPage, search = get().search) => {
     set({ loading: true, error: null });
     const { sortBy, sortOrder, dateFilter, cache } = get();
@@ -94,18 +88,34 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
       }>(
         API_ENDPOINTS.classes +
           `?search=${encodeURIComponent(search)}&page=${page}&perPage=${perPage}&sortBy=${sortBy}&sortOrder=${sortOrder}`,
-        {
-          method: "GET",
-          showError: true,
-        }
+        { method: "GET", showError: true }
       );
 
+      // Compute fullName for staff and students
+      const classesWithFullName = data.classes.map((cls: any) => ({
+        ...cls,
+        staff: cls.staff.map((st: any) => ({
+          ...st,
+          user: {
+            ...st.user,
+            fullName: [st.user.firstName, st.user.surname, st.user.otherNames].filter(Boolean).join(" "),
+          },
+        })),
+        students: cls.students.map((s: any) => ({
+          ...s,
+          user: {
+            ...s.user,
+            fullName: [s.user.firstName, s.user.surname, s.user.otherNames].filter(Boolean).join(" "),
+          },
+        })),
+      }));
+
       set((state) => ({
-        classes: data.classes,
+        classes: classesWithFullName,
         total: data.total,
         page: data.page,
         perPage: data.perPage,
-        cache: { ...state.cache, [cacheKey]: data.classes },
+        cache: { ...state.cache, [cacheKey]: classesWithFullName },
         loading: false,
       }));
     } catch (err: any) {
@@ -132,7 +142,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
         studentId: s.id,
         user: {
           id: s.user?.id ?? s.id,
-          name: s.user?.name ?? "Unnamed Student",
+          fullName: [s.user?.firstName, s.user?.surname, s.user?.otherNames].filter(Boolean).join(" "),
           email: s.user?.email ?? "",
         },
         classId: s.classId ?? classId,
@@ -151,28 +161,26 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   fetchAttendance: async (classId, date) => {
     set({ loading: true });
     try {
-      const data = await apiClient<AttendanceRecord[]>(
-        `${API_ENDPOINTS.classes}/${classId}/attendance?date=${date ?? ""}`
-      );
+      const data = await apiClient<AttendanceRecord[]>(`${API_ENDPOINTS.classes}/${classId}/attendance?date=${date ?? ""}`);
       set({ attendance: data, loading: false });
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }
   },
 
-  createClass: async (name) => {
+  createClass: async (name, grade) => {
     set({ loading: true });
     try {
       const data = await apiClient<Class>(API_ENDPOINTS.classes, {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, grade }),
         showSuccess: true,
         successMessage: `Class "${name}" created successfully`,
       });
 
       set((state) => ({
         classes: [data, ...state.classes],
-        cache: {}, // invalidate cache
+        cache: {},
         loading: false,
       }));
 
@@ -183,33 +191,27 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     }
   },
 
-  updateClass: async (id, name) => {
+  updateClass: async (id, name, grade) => {
     set({ loading: true });
     try {
       const data = await apiClient<Class>(`${API_ENDPOINTS.classes}/${id}`, {
         method: "PUT",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, grade }),
         showSuccess: true,
         successMessage: "Class updated successfully",
       });
 
       set((state) => {
         const updatedClasses = state.classes.map((c) => (c.id === id ? { ...c, ...data } : c));
-        const updatedSelected =
-          state.selectedClass?.id === id ? { ...state.selectedClass, ...data } : state.selectedClass;
-
-        return {
-          classes: [...updatedClasses],
-          selectedClass: updatedSelected,
-          loading: false,
-        };
+        const updatedSelected = state.selectedClass?.id === id ? { ...state.selectedClass, ...data } : state.selectedClass;
+        return { classes: updatedClasses, selectedClass: updatedSelected, loading: false };
       });
 
-      return { success: true, data };
+      return true;
     } catch (err: any) {
       notify("Failed to update class", "error");
       set({ error: err.message, loading: false });
-      return { success: false, error: err.message };
+      return false;
     }
   },
 
@@ -221,11 +223,10 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
         showSuccess: true,
         successMessage: "Class deleted successfully",
       });
-
       set((state) => ({
         classes: state.classes.filter((c) => c.id !== id),
         selectedClass: state.selectedClass?.id === id ? null : state.selectedClass,
-        cache: {}, // invalidate cache
+        cache: {},
         loading: false,
       }));
     } catch (err: any) {
@@ -252,12 +253,9 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   selectClass: (cls) => set({ selectedClass: { ...cls } }),
   clearSelectedClass: () => set({ selectedClass: null }),
 
-  // -------------------------------
-  // Corrected search, sort, filter
-  // -------------------------------
   setSearch: (search) => {
-    set({ search, page: 1 }); // reset page on new search
-    get().fetchClasses(1);    // fetch first page for the new search
+    set({ search, page: 1 });
+    get().fetchClasses(1);
   },
 
   setSort: (sortBy, sortOrder) => {

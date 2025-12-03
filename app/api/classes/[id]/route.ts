@@ -1,18 +1,15 @@
-// app/api/classes/[id]/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { SchoolAccount } from "@/lib/schoolAccount";
+import { prisma } from "@/lib/db.ts";
+import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
 
 const classUpdateSchema = z.object({
   name: z.string().optional(),
+  grade: z.string().optional(),
 });
 
 // -------------------- GET Class by ID --------------------
-export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
   const schoolAccount = await SchoolAccount.init();
   if (!schoolAccount)
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -22,9 +19,16 @@ export async function GET(
     include: {
       students: {
         include: {
-          user: { select: { id: true, name: true, email: true } }, // Include user info
+          user: { select: { id: true, firstName: true, surname: true, otherNames: true, email: true } },
         },
       },
+      staff: {
+        include: {
+          user: { select: { id: true, firstName: true, surname: true, otherNames: true, email: true } },
+        },
+      },
+      subjects: true,
+      exams: true,
     },
   });
 
@@ -35,10 +39,7 @@ export async function GET(
 }
 
 // -------------------- PUT Update Class --------------------
-export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const schoolAccount = await SchoolAccount.init();
   if (!schoolAccount)
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -49,14 +50,13 @@ export async function PUT(
 
     const updatedClass = await prisma.class.updateMany({
       where: { id: params.id, schoolId: schoolAccount.schoolId },
-      data: { name: data.name ?? undefined },
+      data: { name: data.name, grade: data.grade },
     });
 
     if (updatedClass.count === 0) {
       return NextResponse.json({ message: "Class not found or unauthorized" }, { status: 404 });
     }
 
-    // Fetch the updated record to return
     const cls = await prisma.class.findFirst({
       where: { id: params.id, schoolId: schoolAccount.schoolId },
     });
@@ -71,10 +71,7 @@ export async function PUT(
 }
 
 // -------------------- DELETE Class --------------------
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const schoolAccount = await SchoolAccount.init();
   if (!schoolAccount)
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

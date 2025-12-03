@@ -27,7 +27,7 @@ export default function AuthGuard({
       if (!mounted) return;
 
       if (!isAuth && redirectOnFail) {
-        router.replace("/login");
+        router.replace("auth/login");
       } else {
         setVerified(true);
       }

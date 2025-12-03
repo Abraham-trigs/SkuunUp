@@ -1,10 +1,12 @@
+"use client";
+
 import React from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 
 export default function Step1CreateUser() {
   const { formData, setField, errors } = useAdmissionStore();
 
-  const getError = (field: string) => errors[field]?.[0]; // match stepValidators format
+  const getError = (field: string) => errors[field]?.[0];
 
   return (
     <div className="space-y-4" aria-labelledby="step1-title">

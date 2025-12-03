@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Check if default school exists
+  // ------------------ Ensure Default School ------------------
   let school = await prisma.school.findUnique({
     where: { name: "Default School" },
   });
@@ -21,7 +21,7 @@ async function main() {
     console.log("Created default school:", school.name);
   }
 
-  // Check if admin exists
+  // ------------------ Check if Admin exists ------------------
   const existingAdmin = await prisma.user.findUnique({
     where: { email: "admin@defaultschool.edu" },
   });
@@ -31,13 +31,15 @@ async function main() {
     return;
   }
 
-  // Hash password
+  // ------------------ Hash password ------------------
   const hashedPassword = await bcrypt.hash("Admin@123", 10);
 
-  // Create admin
+  // ------------------ Create Admin User ------------------
   const admin = await prisma.user.create({
     data: {
-      name: "Super Admin",
+      firstName: "Super",
+      surname: "Admin",
+      otherNames: "", // optional
       email: "admin@defaultschool.edu",
       password: hashedPassword,
       role: Role.ADMIN,

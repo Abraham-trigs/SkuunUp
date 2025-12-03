@@ -1,8 +1,5 @@
-// app/api/classes/route.ts
-// Purpose: CRUD API for Class model with full pagination, search, and relational includes.
-
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
 
@@ -14,7 +11,6 @@ const classSchema = z.object({
   grade: z.string().min(1, "Grade is required"),
 });
 
-// Optional query filters
 const querySchema = z.object({
   page: z.string().optional(),
   perPage: z.string().optional(),
@@ -44,8 +40,6 @@ export async function GET(req: Request) {
 
     if (query.search) where.name = { contains: query.search, mode: "insensitive" };
     if (query.grade) where.grade = query.grade;
-
-    // Relational filters
     if (query.staffId) where.staff = { some: { id: query.staffId } };
     if (query.subjectId) where.subjects = { some: { id: query.subjectId } };
     if (query.examId) where.exams = { some: { id: query.examId } };
@@ -67,7 +61,9 @@ export async function GET(req: Request) {
             user: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
+                surname: true,
+                otherNames: true,
                 email: true,
               },
             },
@@ -80,13 +76,40 @@ export async function GET(req: Request) {
             id: true,
             userId: true,
             enrolledAt: true,
-            user: { select: { id: true, name: true, email: true } },
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                surname: true,
+                otherNames: true,
+                email: true,
+              },
+            },
           },
         },
       },
     });
 
-    return NextResponse.json({ classes, total, page, perPage });
+    // Add fullName fields for convenience
+    const classesWithFullName = classes.map((cls) => ({
+      ...cls,
+      staff: cls.staff.map((st) => ({
+        ...st,
+        user: {
+          ...st.user,
+          fullName: [st.user.firstName, st.user.surname, st.user.otherNames].filter(Boolean).join(" "),
+        },
+      })),
+      students: cls.students.map((s) => ({
+        ...s,
+        user: {
+          ...s.user,
+          fullName: [s.user.firstName, s.user.surname, s.user.otherNames].filter(Boolean).join(" "),
+        },
+      })),
+    }));
+
+    return NextResponse.json({ classes: classesWithFullName, total, page, perPage });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.errors }, { status: 400 });
