@@ -57,6 +57,8 @@ const PartialAdmissionSchema = z.object({
   receivedBy: z.string().optional(),
   receivedDate: z.coerce.date().optional(),
   remarks: z.string().optional(),
+  status: z.string().optional(),
+  progress: z.number().optional(),
   previousSchools: z.array(PreviousSchoolSchema).optional(),
   familyMembers: z.array(FamilyMemberSchema).optional(),
 });
@@ -108,7 +110,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-// ------------------ PATCH partial update ------------------
+// ------------------ PATCH update ------------------
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const schoolAccount = await authorize(req);
@@ -124,7 +126,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const updatedApp = await tx.application.update({ where: { id: params.id }, data: normalized });
       await replaceNestedArraysTx(tx, params.id, { previousSchools: normalized.previousSchools, familyMembers: normalized.familyMembers });
 
-      // Automatically update student class if classId changed
+      // Update student class if classId changed
       if (normalized.classId && existing.studentId) {
         await tx.student.update({ where: { id: existing.studentId }, data: { classId: normalized.classId } });
       }
@@ -142,7 +144,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// ------------------ DELETE admission ------------------
+// ------------------ DELETE ------------------
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const schoolAccount = await authorize(req);

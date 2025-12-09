@@ -64,6 +64,8 @@ const AdmissionSchema = z.object({
   receivedBy: z.string().optional(),
   receivedDate: z.coerce.date().optional(),
   remarks: z.string().optional(),
+  status: z.string().optional(),
+  progress: z.number().optional(),
   previousSchools: z.array(PreviousSchoolSchema).optional(),
   familyMembers: z.array(FamilyMemberSchema).optional(),
   admissionPin: z.string().optional(),
@@ -172,7 +174,7 @@ export async function POST(req: NextRequest) {
 
       // 2) Create student linked to user
       const student = await tx.student.create({
-        data: { userId: user.id, schoolId: schoolAccount.schoolId, enrolledAt: new Date() },
+        data: { userId: user.id, schoolId: schoolAccount.schoolId, enrolledAt: new Date(), classId: normalized.classId },
       });
 
       // 3) Create application linked to student and user
@@ -213,6 +215,8 @@ export async function POST(req: NextRequest) {
           receivedBy: normalized.receivedBy,
           receivedDate: normalized.receivedDate,
           remarks: normalized.remarks,
+          status: normalized.status ?? "DRAFT",
+          progress: normalized.progress ?? 0,
           previousSchools: normalized.previousSchools ? { create: normalized.previousSchools } : undefined,
           familyMembers: normalized.familyMembers ? { create: normalized.familyMembers } : undefined,
         },

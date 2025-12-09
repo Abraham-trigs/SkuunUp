@@ -104,16 +104,14 @@ interface AdmissionStore {
   loading: boolean;
   errors: Record<string, string[]>;
   userCreated: boolean;
-  minimalCreated: boolean;
 
   setField: (field: string, value: any) => void;
   setErrors: (errors: Record<string, string[]>) => void;
-  markUserCreated: (studentId: string, applicationId?: string) => void;
 
-  createUser: () => Promise<string | false>;
-  createMinimalAdmission: () => Promise<boolean>;
+  initializeAdmission: () => Promise<string | false>;
   updateAdmission: (updatedFields?: Partial<z.infer<typeof admissionFormSchema>>) => Promise<void>;
   fetchStudentAdmission: (applicationId: string) => Promise<void>;
+  deleteAdmission: (applicationId: string) => Promise<boolean>;
   fetchClasses: () => Promise<void>;
 
   addFamilyMember: (member: FamilyMember) => void;
@@ -131,7 +129,6 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   loading: false,
   errors: {},
   userCreated: false,
-  minimalCreated: false,
 
   setField: (field, value) => {
     set((state) => {
@@ -145,83 +142,37 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
 
   setErrors: (errors) => set({ errors }),
 
-  markUserCreated: (studentId, applicationId) => {
-    set((state) => ({
-      formData: { ...state.formData, studentId, applicationId },
-      userCreated: true,
-    }));
-  },
-
-  // ---------------- CREATE USER ----------------
-  createUser: async () => {
+  // ---------------- CREATE USER + ADMISSION ----------------
+  initializeAdmission: async () => {
     set({ loading: true, errors: {} });
     try {
       const schoolId = useAuthStore.getState().user?.school.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
-      const { surname, firstName, otherNames, wardEmail } = get().formData;
-      const password = "Default123";
+      const payload = { ...get().formData };
+      payload.dateOfBirth =
+        typeof payload.dateOfBirth === "string" ? payload.dateOfBirth : payload.dateOfBirth.toISOString().slice(0, 10);
 
-      const resUser = await axios.post(
-        "/api/users",
-        { surname, firstName, otherNames, email: wardEmail, password, role: "STUDENT" },
-        { headers: { "X-School-ID": schoolId } }
-      );
+      const res = await axios.post("/api/admissions", payload, { headers: { "X-School-ID": schoolId } });
 
-      const studentId = resUser.data.student?.id;
-      set({ formData: { ...get().formData, studentId }, userCreated: true });
-      return studentId;
-    } catch (err: any) {
-      set({ errors: { createUser: [err.response?.data?.error || err.message || "Failed to create user"] } });
-      return false;
-    } finally {
-      set({ loading: false });
-    }
-  },
+      const studentId = res.data.admission?.studentId;
+      const applicationId = res.data.admission?.id;
 
-  // ---------------- CREATE MINIMAL ADMISSION ----------------
-  createMinimalAdmission: async () => {
-    set({ loading: true, errors: {} });
-    try {
-      const schoolId = useAuthStore.getState().user?.school.id;
-      if (!schoolId) throw new Error("Unauthorized: School ID missing");
-
-      const { studentId, admissionPin, classId, surname, firstName, dateOfBirth, nationality, sex } = get().formData;
-      if (!studentId) throw new Error("Student ID missing");
-
-      const payload: any = {
-        studentId,
-        classId,
-        surname,
-        firstName,
-        dateOfBirth: typeof dateOfBirth === "string" ? dateOfBirth : dateOfBirth.toISOString().slice(0, 10),
-        nationality,
-        sex,
-      };
-      if (admissionPin) payload.admissionPin = admissionPin;
-
-      const resAdmission = await axios.post(
-        "/api/admissions",
-        payload,
-        { headers: { "X-School-ID": schoolId } }
-      );
-
-      const applicationId = resAdmission.data.admission?.id || resAdmission.data.id;
       set({
-        formData: { ...get().formData, applicationId },
-        minimalCreated: true,
+        formData: { ...get().formData, studentId, applicationId },
+        userCreated: true,
       });
 
-      return true;
+      return studentId;
     } catch (err: any) {
-      set({ errors: { createMinimalAdmission: [err.response?.data?.error || err.message || "Failed to create minimal admission"] } });
+      set({ errors: { initializeAdmission: [err.response?.data?.error || err.message || "Failed to create admission"] } });
       return false;
     } finally {
       set({ loading: false });
     }
   },
 
-  // ---------------- UPDATE ADMISSION (Partial) ----------------
+  // ---------------- UPDATE ADMISSION ----------------
   updateAdmission: async (updatedFields) => {
     const applicationId = get().formData.applicationId;
     if (!applicationId) {
@@ -235,32 +186,16 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
       const body = { ...get().formData, ...updatedFields };
-      const partialSchema = admissionFormSchema.partial();
-      partialSchema.parse(body);
+      admissionFormSchema.partial().parse(body);
 
-      await axios.patch(
-        `/api/admissions?admissionId=${applicationId}`,
-        body,
-        { headers: { "X-School-ID": schoolId } }
-      );
+      await axios.patch(`/api/admissions/${applicationId}`, body, { headers: { "X-School-ID": schoolId } });
 
       set({ formData: body });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
-        set({
-          errors: {
-            updateAdmission:
-              (err.errors || err.issues)?.map(e => e.message) || ["Validation failed"],
-          },
-        });
+        set({ errors: { updateAdmission: err.errors.map((e) => e.message) } });
       } else {
-        set({
-          errors: {
-            updateAdmission: [
-              err?.response?.data?.error || err?.message || "Failed to update admission",
-            ],
-          },
-        });
+        set({ errors: { updateAdmission: [err?.response?.data?.error || err?.message || "Failed to update admission"] } });
       }
     } finally {
       set({ loading: false });
@@ -274,20 +209,29 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       const schoolId = useAuthStore.getState().user?.school.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
-      const res = await axios.get(
-        `/api/admissions?admissionId=${applicationId}`,
-        { headers: { "X-School-ID": schoolId } }
-      );
+      const res = await axios.get(`/api/admissions/${applicationId}`, { headers: { "X-School-ID": schoolId } });
 
-      get().loadStudentData(res.data.admission || res.data.data);
+      get().loadStudentData(res.data.admission || res.data);
     } catch (err: any) {
-      set({
-        errors: {
-          fetchStudentAdmission: [
-            err.response?.data?.error || err.message || "Failed to fetch admission",
-          ],
-        },
-      });
+      set({ errors: { fetchStudentAdmission: [err.response?.data?.error || err.message || "Failed to fetch admission"] } });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  // ---------------- DELETE ADMISSION ----------------
+  deleteAdmission: async (applicationId) => {
+    set({ loading: true, errors: {} });
+    try {
+      const schoolId = useAuthStore.getState().user?.school.id;
+      if (!schoolId) throw new Error("Unauthorized: School ID missing");
+
+      await axios.delete(`/api/admissions/${applicationId}`, { headers: { "X-School-ID": schoolId } });
+      set({ formData: admissionFormSchema.partial().parse({ admissionPin: "" }), userCreated: false });
+      return true;
+    } catch (err: any) {
+      set({ errors: { deleteAdmission: [err.response?.data?.error || err.message || "Failed to delete admission"] } });
+      return false;
     } finally {
       set({ loading: false });
     }
@@ -304,22 +248,14 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   },
 
   addFamilyMember: (member) =>
-    set((state) => ({
-      formData: { ...state.formData, familyMembers: [...(state.formData.familyMembers || []), member] },
-    })),
+    set((state) => ({ formData: { ...state.formData, familyMembers: [...(state.formData.familyMembers || []), member] } })),
   removeFamilyMember: (idx) =>
-    set((state) => ({
-      formData: { ...state.formData, familyMembers: state.formData.familyMembers?.filter((_, i) => i !== idx) },
-    })),
+    set((state) => ({ formData: { ...state.formData, familyMembers: state.formData.familyMembers?.filter((_, i) => i !== idx) } })),
 
   addPreviousSchool: (school) =>
-    set((state) => ({
-      formData: { ...state.formData, previousSchools: [...(state.formData.previousSchools || []), school] },
-    })),
+    set((state) => ({ formData: { ...state.formData, previousSchools: [...(state.formData.previousSchools || []), school] } })),
   removePreviousSchool: (idx) =>
-    set((state) => ({
-      formData: { ...state.formData, previousSchools: state.formData.previousSchools?.filter((_, i) => i !== idx) },
-    })),
+    set((state) => ({ formData: { ...state.formData, previousSchools: state.formData.previousSchools?.filter((_, i) => i !== idx) } })),
 
   loadStudentData: (admission) => {
     if (!admission) return;
@@ -367,7 +303,6 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
         familyMembers: admission.familyMembers || [],
       },
       userCreated: true,
-      minimalCreated: true,
     });
   },
 }));
