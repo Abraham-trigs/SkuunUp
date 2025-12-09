@@ -5,7 +5,6 @@ import { z } from "zod";
 import axios from "axios";
 import { useClassesStore } from "./useClassesStore.ts";
 import { useAuthStore } from "./useAuthStore.ts";
-import { API_ENDPOINTS } from "@/lib/api/endpoints.ts";
 
 // ------------------ Types ------------------
 export type FamilyMember = {
@@ -24,8 +23,8 @@ export type FamilyMember = {
 export type PreviousSchool = {
   name: string;
   location: string;
-  startDate: string;
-  endDate: string;
+  startDate: string | Date;
+  endDate: string | Date;
 };
 
 export type SchoolClass = {
@@ -34,7 +33,7 @@ export type SchoolClass = {
   grade: string;
 };
 
-// ------------------ Nested Zod Schemas ------------------
+// ------------------ Zod Schemas ------------------
 const FamilyMemberSchema = z.object({
   relation: z.string(),
   name: z.string(),
@@ -51,14 +50,14 @@ const FamilyMemberSchema = z.object({
 const PreviousSchoolSchema = z.object({
   name: z.string(),
   location: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
 });
 
-// ------------------ Admission Form Schema ------------------
 export const admissionFormSchema = z.object({
-  admissionPin: z.string(),
+  applicationId: z.string().optional(),
   studentId: z.string().optional(),
+  admissionPin: z.string().optional(),
   classId: z.string(),
   surname: z.string(),
   firstName: z.string(),
@@ -73,7 +72,6 @@ export const admissionFormSchema = z.object({
   hometown: z.string(),
   region: z.string(),
   profilePicture: z.string().optional(),
-
   wardLivesWith: z.string(),
   numberOfSiblings: z.number().optional(),
   siblingsOlder: z.number().optional(),
@@ -84,11 +82,9 @@ export const admissionFormSchema = z.object({
   wardEmail: z.string().optional(),
   emergencyContact: z.string(),
   emergencyMedicalContact: z.string().optional(),
-
   medicalSummary: z.string().optional(),
   bloodType: z.string().optional(),
   specialDisability: z.string().optional(),
-
   feesAcknowledged: z.boolean().default(false),
   declarationSigned: z.boolean().default(false),
   signature: z.string().optional(),
@@ -97,7 +93,6 @@ export const admissionFormSchema = z.object({
   receivedBy: z.string().optional(),
   receivedDate: z.string().optional(),
   remarks: z.string().optional(),
-
   previousSchools: z.array(PreviousSchoolSchema).optional(),
   familyMembers: z.array(FamilyMemberSchema).optional(),
 });
@@ -108,16 +103,17 @@ interface AdmissionStore {
   availableClasses: SchoolClass[];
   loading: boolean;
   errors: Record<string, string[]>;
-  submitted: boolean;
   userCreated: boolean;
+  minimalCreated: boolean;
 
   setField: (field: string, value: any) => void;
-  markUserCreated: (studentId: string) => void;
+  setErrors: (errors: Record<string, string[]>) => void;
+  markUserCreated: (studentId: string, applicationId?: string) => void;
 
-  createUser: () => Promise<any>;
-  submitForm: () => Promise<void>;
-  updateAdmission: (updatedFields?: Partial<z.infer<typeof admissionFormSchema>>, stepNumber?: number) => Promise<void>;
-  fetchStudentAdmission: (studentId: string) => Promise<void>;
+  createUser: () => Promise<string | false>;
+  createMinimalAdmission: () => Promise<boolean>;
+  updateAdmission: (updatedFields?: Partial<z.infer<typeof admissionFormSchema>>) => Promise<void>;
+  fetchStudentAdmission: (applicationId: string) => Promise<void>;
   fetchClasses: () => Promise<void>;
 
   addFamilyMember: (member: FamilyMember) => void;
@@ -125,7 +121,7 @@ interface AdmissionStore {
   addPreviousSchool: (school: PreviousSchool) => void;
   removePreviousSchool: (idx: number) => void;
 
-  loadStudentData: (student: any) => void;
+  loadStudentData: (admission: any) => void;
 }
 
 // ------------------ Store Implementation ------------------
@@ -134,10 +130,9 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   availableClasses: [],
   loading: false,
   errors: {},
-  submitted: false,
   userCreated: false,
+  minimalCreated: false,
 
-  // ------------------ Field Setter ------------------
   setField: (field, value) => {
     set((state) => {
       const keys = field.split(".");
@@ -148,11 +143,16 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     });
   },
 
-  markUserCreated: (studentId: string) => {
-    set((state) => ({ formData: { ...state.formData, studentId }, userCreated: true }));
+  setErrors: (errors) => set({ errors }),
+
+  markUserCreated: (studentId, applicationId) => {
+    set((state) => ({
+      formData: { ...state.formData, studentId, applicationId },
+      userCreated: true,
+    }));
   },
 
-  // ------------------ Create User ------------------
+  // ---------------- CREATE USER ----------------
   createUser: async () => {
     set({ loading: true, errors: {} });
     try {
@@ -160,23 +160,17 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
       const { surname, firstName, otherNames, wardEmail } = get().formData;
-      const password = "Default123"; // could generate or prompt in Step1
+      const password = "Default123";
 
-      const res = await axios.post(API_ENDPOINTS.users, {
-        surname,
-        firstName,
-        otherNames,
-        email: wardEmail,
-        password,
-        role: "STUDENT",
-      }, { headers: { "X-School-ID": schoolId } });
+      const resUser = await axios.post(
+        "/api/users",
+        { surname, firstName, otherNames, email: wardEmail, password, role: "STUDENT" },
+        { headers: { "X-School-ID": schoolId } }
+      );
 
-      set({
-        formData: { ...get().formData, studentId: res.data.student?.id },
-        userCreated: true,
-      });
-
-      return res.data;
+      const studentId = resUser.data.student?.id;
+      set({ formData: { ...get().formData, studentId }, userCreated: true });
+      return studentId;
     } catch (err: any) {
       set({ errors: { createUser: [err.response?.data?.error || err.message || "Failed to create user"] } });
       return false;
@@ -185,41 +179,53 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     }
   },
 
-  // ------------------ Submit Admission ------------------
-  submitForm: async () => {
-    if (!get().userCreated) {
-      set({ errors: { submitForm: ["User must be created first."] } });
-      return;
-    }
-
+  // ---------------- CREATE MINIMAL ADMISSION ----------------
+  createMinimalAdmission: async () => {
     set({ loading: true, errors: {} });
     try {
       const schoolId = useAuthStore.getState().user?.school.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
-      admissionFormSchema.parse(get().formData);
+      const { studentId, admissionPin, classId, surname, firstName, dateOfBirth, nationality, sex } = get().formData;
+      if (!studentId) throw new Error("Student ID missing");
 
-      await axios.post(API_ENDPOINTS.admissions, get().formData, {
-        headers: { "X-School-ID": schoolId },
+      const payload: any = {
+        studentId,
+        classId,
+        surname,
+        firstName,
+        dateOfBirth: typeof dateOfBirth === "string" ? dateOfBirth : dateOfBirth.toISOString().slice(0, 10),
+        nationality,
+        sex,
+      };
+      if (admissionPin) payload.admissionPin = admissionPin;
+
+      const resAdmission = await axios.post(
+        "/api/admissions",
+        payload,
+        { headers: { "X-School-ID": schoolId } }
+      );
+
+      const applicationId = resAdmission.data.admission?.id || resAdmission.data.id;
+      set({
+        formData: { ...get().formData, applicationId },
+        minimalCreated: true,
       });
 
-      set({ submitted: true });
+      return true;
     } catch (err: any) {
-      if (err instanceof z.ZodError) {
-        set({ errors: { submitForm: err.errors.map((e) => e.message) } });
-      } else {
-        set({ errors: { submitForm: [err.response?.data?.error || err.message || "Failed to submit admission"] } });
-      }
+      set({ errors: { createMinimalAdmission: [err.response?.data?.error || err.message || "Failed to create minimal admission"] } });
+      return false;
     } finally {
       set({ loading: false });
     }
   },
 
-  // ------------------ Update Admission ------------------
-  updateAdmission: async (updatedFields, stepNumber) => {
-    const studentId = get().formData.studentId;
-    if (!studentId) {
-      set({ errors: { updateAdmission: ["Student ID missing"] } });
+  // ---------------- UPDATE ADMISSION (Partial) ----------------
+  updateAdmission: async (updatedFields) => {
+    const applicationId = get().formData.applicationId;
+    if (!applicationId) {
+      set({ errors: { updateAdmission: ["Application ID missing"] } });
       return;
     }
 
@@ -229,53 +235,64 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
       const body = { ...get().formData, ...updatedFields };
+      const partialSchema = admissionFormSchema.partial();
+      partialSchema.parse(body);
 
-      if (stepNumber) {
-        const { valid, errors: stepErrors } = validateStep(stepNumber, body);
-        if (!valid) {
-          set({ errors: stepErrors });
-          return;
-        }
-      } else {
-        admissionFormSchema.parse(body);
-      }
-
-      await axios.put(`${API_ENDPOINTS.admissions}/${studentId}`, body, {
-        headers: { "X-School-ID": schoolId },
-      });
+      await axios.patch(
+        `/api/admissions?admissionId=${applicationId}`,
+        body,
+        { headers: { "X-School-ID": schoolId } }
+      );
 
       set({ formData: body });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
-        set({ errors: { updateAdmission: (err.errors || err.issues)?.map(e => e.message) || ["Validation failed"] } });
+        set({
+          errors: {
+            updateAdmission:
+              (err.errors || err.issues)?.map(e => e.message) || ["Validation failed"],
+          },
+        });
       } else {
-        set({ errors: { updateAdmission: [err?.response?.data?.error || err?.message || "Failed to update admission"] } });
+        set({
+          errors: {
+            updateAdmission: [
+              err?.response?.data?.error || err?.message || "Failed to update admission",
+            ],
+          },
+        });
       }
     } finally {
       set({ loading: false });
     }
   },
 
-  // ------------------ Fetch Student Admission ------------------
-  fetchStudentAdmission: async (studentId) => {
+  // ---------------- FETCH STUDENT ADMISSION ----------------
+  fetchStudentAdmission: async (applicationId) => {
     set({ loading: true, errors: {} });
     try {
       const schoolId = useAuthStore.getState().user?.school.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
-      const res = await axios.get(`${API_ENDPOINTS.admissions}/${studentId}`, {
-        headers: { "X-School-ID": schoolId },
-      });
+      const res = await axios.get(
+        `/api/admissions?admissionId=${applicationId}`,
+        { headers: { "X-School-ID": schoolId } }
+      );
 
-      get().loadStudentData(res.data.student);
+      get().loadStudentData(res.data.admission || res.data.data);
     } catch (err: any) {
-      set({ errors: { fetchStudentAdmission: [err.response?.data?.error || err.message || "Failed to fetch admission"] } });
+      set({
+        errors: {
+          fetchStudentAdmission: [
+            err.response?.data?.error || err.message || "Failed to fetch admission",
+          ],
+        },
+      });
     } finally {
       set({ loading: false });
     }
   },
 
-  // ------------------ Fetch Classes ------------------
   fetchClasses: async () => {
     try {
       await useClassesStore.getState().fetchClasses(1, 100);
@@ -286,7 +303,6 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     }
   },
 
-  // ------------------ Family Members ------------------
   addFamilyMember: (member) =>
     set((state) => ({
       formData: { ...state.formData, familyMembers: [...(state.formData.familyMembers || []), member] },
@@ -296,7 +312,6 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       formData: { ...state.formData, familyMembers: state.formData.familyMembers?.filter((_, i) => i !== idx) },
     })),
 
-  // ------------------ Previous Schools ------------------
   addPreviousSchool: (school) =>
     set((state) => ({
       formData: { ...state.formData, previousSchools: [...(state.formData.previousSchools || []), school] },
@@ -306,19 +321,18 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       formData: { ...state.formData, previousSchools: state.formData.previousSchools?.filter((_, i) => i !== idx) },
     })),
 
-  // ------------------ Load Student Data ------------------
-  loadStudentData: (student) => {
-    if (!student.admission) return;
-    const admission = student.admission;
+  loadStudentData: (admission) => {
+    if (!admission) return;
     set({
       formData: {
         ...get().formData,
-        studentId: student.id,
-        classId: student.classId || admission.classId,
+        applicationId: admission.id,
+        studentId: admission.student?.id,
+        classId: admission.student?.classId || "",
         surname: admission.surname,
         firstName: admission.firstName,
         otherNames: admission.otherNames,
-        dateOfBirth: admission.dateOfBirth,
+        dateOfBirth: new Date(admission.dateOfBirth),
         nationality: admission.nationality,
         sex: admission.sex,
         languages: admission.languages,
@@ -335,7 +349,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
         postalAddress: admission.postalAddress,
         residentialAddress: admission.residentialAddress,
         wardMobile: admission.wardMobile,
-        wardEmail: student.email,
+        wardEmail: admission.student?.user?.email,
         emergencyContact: admission.emergencyContact,
         emergencyMedicalContact: admission.emergencyMedicalContact,
         medicalSummary: admission.medicalSummary,
@@ -347,12 +361,13 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
         classification: admission.classification,
         submittedBy: admission.submittedBy,
         receivedBy: admission.receivedBy,
-        receivedDate: admission.receivedDate,
+        receivedDate: admission.receivedDate ? new Date(admission.receivedDate) : null,
         remarks: admission.remarks,
         previousSchools: admission.previousSchools || [],
         familyMembers: admission.familyMembers || [],
       },
       userCreated: true,
+      minimalCreated: true,
     });
   },
 }));

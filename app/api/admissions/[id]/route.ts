@@ -1,7 +1,8 @@
+// app/api/admissions/route/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db.ts";
 import { z } from "zod";
-import { SchoolAccount } from "@/lib/schoolAccount";
+import { SchoolAccount } from "@/lib/schoolAccount.ts";
 
 const FamilyMemberSchema = z.object({
   relation: z.string(),
@@ -19,137 +20,119 @@ const FamilyMemberSchema = z.object({
 const PreviousSchoolSchema = z.object({
   name: z.string(),
   location: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
 });
 
-const AdmissionSchema = z.object({
-  classId: z.string(),
-  surname: z.string(),
-  firstName: z.string(),
+const AdmissionUpdateSchema = z.object({
+  // Full optional for multi-step updates
+  surname: z.string().optional(),
+  firstName: z.string().optional(),
   otherNames: z.string().optional(),
-  dateOfBirth: z.string(),
-  nationality: z.string(),
-  sex: z.string(),
-  languages: z.array(z.string()),
-  mothersTongue: z.string(),
-  religion: z.string(),
+  dateOfBirth: z.coerce.date().optional(),
+  nationality: z.string().optional(),
+  sex: z.string().optional(),
+  languages: z.array(z.string()).optional(),
+  mothersTongue: z.string().optional(),
+  religion: z.string().optional(),
   denomination: z.string().optional(),
-  hometown: z.string(),
-  region: z.string(),
+  hometown: z.string().optional(),
+  region: z.string().optional(),
   profilePicture: z.string().optional(),
-  wardLivesWith: z.string(),
+  wardLivesWith: z.string().optional(),
   numberOfSiblings: z.number().optional(),
   siblingsOlder: z.number().optional(),
   siblingsYounger: z.number().optional(),
-  postalAddress: z.string(),
-  residentialAddress: z.string(),
+  postalAddress: z.string().optional(),
+  residentialAddress: z.string().optional(),
   wardMobile: z.string().optional(),
   wardEmail: z.string().optional(),
-  emergencyContact: z.string(),
+  emergencyContact: z.string().optional(),
   emergencyMedicalContact: z.string().optional(),
   medicalSummary: z.string().optional(),
   bloodType: z.string().optional(),
   specialDisability: z.string().optional(),
-  feesAcknowledged: z.boolean().default(false),
-  declarationSigned: z.boolean().default(false),
+  feesAcknowledged: z.boolean().optional(),
+  declarationSigned: z.boolean().optional(),
   signature: z.string().optional(),
   classification: z.string().optional(),
   submittedBy: z.string().optional(),
   receivedBy: z.string().optional(),
-  receivedDate: z.string().optional(),
+  receivedDate: z.coerce.date().optional(),
   remarks: z.string().optional(),
   previousSchools: z.array(PreviousSchoolSchema).optional(),
   familyMembers: z.array(FamilyMemberSchema).optional(),
 });
 
-// -------------------- GET by studentId --------------------
-export async function GET(req: NextRequest, { params }: { params: { studentId: string } }) {
-  try {
-    const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+async function authorize(req: NextRequest) {
+  const schoolAccount = await SchoolAccount.init();
+  if (!schoolAccount) throw new Error("Unauthorized");
+  return schoolAccount;
+}
 
-    const { studentId } = params;
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      include: { application: { include: { previousSchools: true, familyMembers: true } } },
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const schoolAccount = await authorize(req);
+    const { id } = params;
+
+    const admission = await prisma.application.findUnique({
+      where: { id },
+      include: { student: { include: { user: true } }, previousSchools: true, familyMembers: true, admissionPayment: true },
     });
 
-    if (!student) return NextResponse.json({ error: "Student not found" }, { status: 404 });
+    if (!admission || admission.schoolId !== schoolAccount.schoolId)
+      return NextResponse.json({ error: "Admission not found" }, { status: 404 });
 
-    return NextResponse.json({ student });
+    return NextResponse.json({ success: true, data: admission });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
 }
 
-// -------------------- PUT update admission --------------------
-export async function PUT(req: NextRequest, { params }: { params: { studentId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const { studentId } = params;
+    const schoolAccount = await authorize(req);
+    const { id } = params;
     const body = await req.json();
-    const data = AdmissionSchema.parse(body);
+    const data = AdmissionUpdateSchema.parse(body);
 
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      include: { application: true },
-    });
-    if (!student || !student.application) return NextResponse.json({ error: "Admission not found" }, { status: 404 });
+    const admission = await prisma.application.findUnique({ where: { id } });
+    if (!admission || admission.schoolId !== schoolAccount.schoolId)
+      return NextResponse.json({ error: "Admission not found" }, { status: 404 });
 
     const updatedAdmission = await prisma.$transaction(async (tx) => {
-      await tx.previousSchools.deleteMany({ where: { applicationId: student.application.id } });
-      await tx.familyMembers.deleteMany({ where: { applicationId: student.application.id } });
+      if (data.previousSchools) {
+        await tx.previousSchools.deleteMany({ where: { applicationId: id } });
+        await tx.previousSchools.createMany({ data: data.previousSchools.map(s => ({ ...s, applicationId: id })) });
+      }
+      if (data.familyMembers) {
+        await tx.familyMembers.deleteMany({ where: { applicationId: id } });
+        await tx.familyMembers.createMany({ data: data.familyMembers.map(f => ({ ...f, applicationId: id })) });
+      }
 
-      return tx.application.update({
-        where: { id: student.application.id },
-        data: {
-          classId: data.classId,
-          surname: data.surname,
-          firstName: data.firstName,
-          otherNames: data.otherNames,
-          dateOfBirth: new Date(data.dateOfBirth),
-          nationality: data.nationality,
-          sex: data.sex,
-          languages: data.languages,
-          mothersTongue: data.mothersTongue,
-          religion: data.religion,
-          denomination: data.denomination,
-          hometown: data.hometown,
-          region: data.region,
-          profilePicture: data.profilePicture,
-          wardLivesWith: data.wardLivesWith,
-          numberOfSiblings: data.numberOfSiblings,
-          siblingsOlder: data.siblingsOlder,
-          siblingsYounger: data.siblingsYounger,
-          postalAddress: data.postalAddress,
-          residentialAddress: data.residentialAddress,
-          wardMobile: data.wardMobile,
-          wardEmail: data.wardEmail,
-          emergencyContact: data.emergencyContact,
-          emergencyMedicalContact: data.emergencyMedicalContact,
-          medicalSummary: data.medicalSummary,
-          bloodType: data.bloodType,
-          specialDisability: data.specialDisability,
-          feesAcknowledged: data.feesAcknowledged,
-          declarationSigned: data.declarationSigned,
-          signature: data.signature,
-          classification: data.classification,
-          submittedBy: data.submittedBy,
-          receivedBy: data.receivedBy,
-          receivedDate: data.receivedDate ? new Date(data.receivedDate) : undefined,
-          remarks: data.remarks,
-          previousSchools: { create: data.previousSchools || [] },
-          familyMembers: { create: data.familyMembers || [] },
-        },
-      });
+      const { previousSchools, familyMembers, ...appFields } = data;
+      return tx.application.update({ where: { id }, data: appFields });
     });
 
-    return NextResponse.json({ success: true, updatedAdmission });
+    return NextResponse.json({ success: true, data: updatedAdmission });
   } catch (err: any) {
     if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 });
+    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const schoolAccount = await authorize(req);
+    const { id } = params;
+
+    const admission = await prisma.application.findUnique({ where: { id } });
+    if (!admission || admission.schoolId !== schoolAccount.schoolId)
+      return NextResponse.json({ error: "Admission not found" }, { status: 404 });
+
+    await prisma.application.delete({ where: { id } });
+    return NextResponse.json({ success: true, message: "Admission deleted" });
+  } catch (err: any) {
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
 }

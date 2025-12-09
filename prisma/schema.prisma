@@ -34,6 +34,14 @@ enum Role {
   AUDITOR
 }
 
+enum ApplicationStatus {
+  DRAFT // still filling form
+  READY_FOR_REVIEW // all required fields filled
+  SUBMITTED // finalised
+  APPROVED // accepted
+  REJECTED // declined
+}
+
 model School {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -56,27 +64,34 @@ model School {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  surname   String
-  firstName String
+  id String @id @default(cuid())
+
+  // ---- Personal Information (authoritative) ----
+  surname    String
+  firstName  String
   otherNames String?
-  email     String   @unique
-  password  String
-  role      Role
-  schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  student      Student?
-  staff        Staff?
-  LibraryStaff LibraryStaff?
+  // ---- Auth ----
+  email    String @unique
+  password String
+  role     Role
 
+  // ---- School Association ----
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  // ---- Relations ----
+  student         Student?
+  staff           Staff?
+  LibraryStaff    LibraryStaff?
   createdSubjects Subject[]
 
+  // Each user can have exactly ONE application
   application Application? @relation("UserApplication")
-}
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
 // prisma/application.prisma
 // Models to capture student admission application form data with indexes.
@@ -99,72 +114,161 @@ model Student {
   Borrow            Borrow[]
   Transaction       Transaction[]
   Purchase          Purchase[]
+  Grade             Grade?              @relation(fields: [gradeId], references: [id])
+  gradeId           String?
+}
+
+// ------------------ Class ------------------
+model Class {
+  id       String @id @default(cuid())
+  name     String // e.g., "6"
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  // Optional relations
+  grades   Grade[] // sections like A, B
+  students Student[] // optional
+  staff    Staff[] // optional
+  exams    Exam[] // optional
+  subjects Subject[] @relation("ClassSubjects") // optional
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, schoolId])
+}
+
+// ------------------ Grade / Section ------------------
+model Grade {
+  id      String @id @default(cuid())
+  name    String @default("A") // defaults to "A" if not specified
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  students Student[] // optional
+
+  // Many-to-many relation with Staff (for multiple grade assignments)
+  staff Staff[] @relation("StaffGrades")
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  Application Application[]
+
+  @@unique([name, classId])
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  code      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Make createdById nullable initially to avoid breaking existing rows
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  exams    Exam[]
+  staff    Staff[]   @relation("StaffSubjects")
+  students Student[] @relation("StudentSubjects") // many-to-many
+  classes  Class[]   @relation("ClassSubjects") // many-to-many
+
+  // Many-to-many relation with StaffApplication
+  staffApplications StaffApplication[] @relation("StaffApplicationSubjects")
+}
+
+model Exam {
+  id        String   @id @default(cuid())
+  title     String
+  studentId String?
+  student   Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId   String?
+  class     Class?   @relation(fields: [classId], references: [id])
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  score     Float?
+  maxScore  Float?
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Application {
-  id        String  @id @default(cuid())
-  studentId String  @unique
-  student   Student @relation("StudentApplication", fields: [studentId], references: [id])
-  userId    String  @unique
-  user      User    @relation("UserApplication", fields: [userId], references: [id])
-  schoolId  String
-  school    School  @relation(fields: [schoolId], references: [id])
+  id String @id @default(cuid())
 
-  surname        String
-  firstName      String
-  otherNames     String?
-  dateOfBirth    DateTime
-  nationality    String
-  sex            String
+  // ---- Relations ----
+  studentId String?  @unique
+  student   Student? @relation("StudentApplication", fields: [studentId], references: [id])
+
+  userId String? @unique
+  user   User?   @relation("UserApplication", fields: [userId], references: [id])
+
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id])
+
+  admissionPaymentId String?
+  admissionPayment   AdmissionPayment? @relation(fields: [admissionPaymentId], references: [id])
+
+  previousSchools PreviousSchool[]
+  familyMembers   FamilyMember[]
+
+  // ---- Core Personal Fields ----
+  dateOfBirth DateTime?
+  nationality String?
+  sex         String?
+
+  // ---- Optional Multi-step Fields ----
   languages      String[]
-  grade          String
-  mothersTongue  String
-  religion       String
+  gradeId        String? // optional, references Grade
+  grade          Grade?   @relation(fields: [gradeId], references: [id])
+  mothersTongue  String?
+  religion       String?
   denomination   String?
-  hometown       String
-  region         String
+  hometown       String?
+  region         String?
   profilePicture String?
 
-  wardLivesWith           String
+  wardLivesWith           String?
   numberOfSiblings        Int?
   siblingsOlder           Int?
   siblingsYounger         Int?
-  postalAddress           String
-  residentialAddress      String
+  postalAddress           String?
+  residentialAddress      String?
   wardMobile              String?
   wardEmail               String?
-  emergencyContact        String
+  emergencyContact        String?
   emergencyMedicalContact String?
 
   medicalSummary    String?
   bloodType         String?
   specialDisability String?
 
-  feesAcknowledged  Boolean   @default(false)
-  declarationSigned Boolean   @default(false)
+  // ---- Acknowledgement & Declaration ----
+  feesAcknowledged  Boolean @default(false)
+  declarationSigned Boolean @default(false)
   signature         String?
-  submissionDate    DateTime? @default(now())
 
+  // ---- Submission Meta ----
+  submissionDate DateTime? @default(now())
   classification String?
   submittedBy    String?
   receivedBy     String?
   receivedDate   DateTime?
   remarks        String?
 
+  // ---- Workflow ----
+  status   ApplicationStatus @default(DRAFT)
+  progress Int               @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  previousSchools PreviousSchool[]
-  familyMembers   FamilyMember[]
-
-  admissionPaymentId String?
-  admissionPayment   AdmissionPayment? @relation(fields: [admissionPaymentId], references: [id])
-
+  // ---- Indexes ----
   @@index([schoolId])
-  @@index([grade])
+  @@index([gradeId])
   @@index([submissionDate])
   @@index([feesAcknowledged])
-  @@index([schoolId, grade])
+  @@index([schoolId, gradeId])
   @@index([submissionDate, feesAcknowledged])
 }
 
@@ -204,59 +308,6 @@ model FamilyMember {
   @@index([applicationId])
   @@index([relation])
   @@index([name])
-}
-
-model Class {
-  id       String    @id @default(cuid())
-  name     String
-  grade    String
-  schoolId String
-  school   School    @relation(fields: [schoolId], references: [id])
-  students Student[]
-  staff    Staff[]
-  exams    Exam[] // Fixed: opposite relation for Exam.class
-  subjects Subject[] @relation("ClassSubjects") // Fixed: opposite of Subject.classes
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([name, schoolId])
-}
-
-model Subject {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  code      String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Make createdById nullable initially to avoid breaking existing rows
-  createdById String?
-  createdBy   User?   @relation(fields: [createdById], references: [id])
-
-  exams    Exam[]
-  staff    Staff[]   @relation("StaffSubjects")
-  students Student[] @relation("StudentSubjects") // many-to-many
-  classes  Class[]   @relation("ClassSubjects") // many-to-many
-
-  // Many-to-many relation with StaffApplication
-  staffApplications StaffApplication[] @relation("StaffApplicationSubjects")
-}
-
-model Exam {
-  id        String   @id @default(cuid())
-  title     String
-  studentId String?
-  student   Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  classId   String?
-  class     Class?   @relation(fields: [classId], references: [id])
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id])
-  score     Float?
-  maxScore  Float?
-  date      DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model StaffApplication {
@@ -337,17 +388,22 @@ model PreviousJob {
   @@index([staffApplicationId])
 }
 
+// ------------------ Staff ------------------
 model Staff {
-  id        String    @id @default(cuid())
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id])
-  classId   String?
-  class     Class?    @relation(fields: [classId], references: [id])
-  position  String?
-  salary    Float?
-  hireDate  DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Optional class-level assignment
+  classId String?
+  class   Class?  @relation(fields: [classId], references: [id])
+
+  // Many-to-many grade assignments
+  grades Grade[] @relation("StaffGrades")
+
+  position String?
+  salary   Float?
+  hireDate DateTime?
 
   department   Department? @relation(fields: [departmentId], references: [id])
   departmentId String?
@@ -355,6 +411,9 @@ model Staff {
   subjects         Subject[]         @relation("StaffSubjects") // optional: subjects they teach
   attendances      StaffAttendance[]
   StaffApplication StaffApplication?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Department {
