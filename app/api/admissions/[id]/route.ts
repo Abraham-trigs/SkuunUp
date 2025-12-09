@@ -1,9 +1,9 @@
-// app/api/admissions/route/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db.ts";
+import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { SchoolAccount } from "@/lib/schoolAccount.ts";
+import { SchoolAccount } from "@/lib/schoolAccount";
 
+// ------------------ Zod Schemas ------------------
 const FamilyMemberSchema = z.object({
   relation: z.string(),
   name: z.string(),
@@ -24,11 +24,8 @@ const PreviousSchoolSchema = z.object({
   endDate: z.coerce.date(),
 });
 
-const AdmissionUpdateSchema = z.object({
-  // Full optional for multi-step updates
-  surname: z.string().optional(),
-  firstName: z.string().optional(),
-  otherNames: z.string().optional(),
+const PartialAdmissionSchema = z.object({
+  classId: z.string().optional(),
   dateOfBirth: z.coerce.date().optional(),
   nationality: z.string().optional(),
   sex: z.string().optional(),
@@ -46,7 +43,7 @@ const AdmissionUpdateSchema = z.object({
   postalAddress: z.string().optional(),
   residentialAddress: z.string().optional(),
   wardMobile: z.string().optional(),
-  wardEmail: z.string().optional(),
+  wardEmail: z.string().email().optional(),
   emergencyContact: z.string().optional(),
   emergencyMedicalContact: z.string().optional(),
   medicalSummary: z.string().optional(),
@@ -64,75 +61,98 @@ const AdmissionUpdateSchema = z.object({
   familyMembers: z.array(FamilyMemberSchema).optional(),
 });
 
+// ------------------ Helpers ------------------
 async function authorize(req: NextRequest) {
-  const schoolAccount = await SchoolAccount.init();
+  const schoolAccount = await SchoolAccount.init(req);
   if (!schoolAccount) throw new Error("Unauthorized");
   return schoolAccount;
 }
 
+function normalizeForPrisma(data: any) {
+  const out = { ...data };
+  if (out.previousSchools) out.previousSchools = out.previousSchools.map((ps: any) => ({ ...ps }));
+  if (out.familyMembers) out.familyMembers = out.familyMembers.map((fm: any) => ({ ...fm }));
+  return out;
+}
+
+async function replaceNestedArraysTx(tx: any, applicationId: string, payload: { previousSchools?: any[]; familyMembers?: any[] }) {
+  const promises: Promise<any>[] = [];
+  if (payload.previousSchools) {
+    promises.push(tx.previousSchool.deleteMany({ where: { applicationId } }));
+    if (payload.previousSchools.length > 0) {
+      promises.push(tx.previousSchool.createMany({ data: payload.previousSchools.map((ps) => ({ ...ps, applicationId })) }));
+    }
+  }
+  if (payload.familyMembers) {
+    promises.push(tx.familyMember.deleteMany({ where: { applicationId } }));
+    if (payload.familyMembers.length > 0) {
+      promises.push(tx.familyMember.createMany({ data: payload.familyMembers.map((fm) => ({ ...fm, applicationId })) }));
+    }
+  }
+  await Promise.all(promises);
+}
+
+// ------------------ GET single admission ------------------
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const schoolAccount = await authorize(req);
-    const { id } = params;
-
     const admission = await prisma.application.findUnique({
-      where: { id },
-      include: { student: { include: { user: true } }, previousSchools: true, familyMembers: true, admissionPayment: true },
+      where: { id: params.id },
+      include: { student: { include: { user: true } }, previousSchools: true, familyMembers: true },
     });
-
-    if (!admission || admission.schoolId !== schoolAccount.schoolId)
-      return NextResponse.json({ error: "Admission not found" }, { status: 404 });
-
-    return NextResponse.json({ success: true, data: admission });
+    if (!admission) return NextResponse.json({ error: "Admission not found" }, { status: 404 });
+    if (admission.schoolId !== schoolAccount.schoolId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ success: true, admission });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
 
+// ------------------ PATCH partial update ------------------
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const schoolAccount = await authorize(req);
-    const { id } = params;
+    const existing = await prisma.application.findUnique({ where: { id: params.id } });
+    if (!existing) return NextResponse.json({ error: "Admission not found" }, { status: 404 });
+    if (existing.schoolId !== schoolAccount.schoolId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const body = await req.json();
-    const data = AdmissionUpdateSchema.parse(body);
+    const parsed = PartialAdmissionSchema.parse(body);
+    const normalized = normalizeForPrisma(parsed);
 
-    const admission = await prisma.application.findUnique({ where: { id } });
-    if (!admission || admission.schoolId !== schoolAccount.schoolId)
-      return NextResponse.json({ error: "Admission not found" }, { status: 404 });
+    const admission = await prisma.$transaction(async (tx) => {
+      const updatedApp = await tx.application.update({ where: { id: params.id }, data: normalized });
+      await replaceNestedArraysTx(tx, params.id, { previousSchools: normalized.previousSchools, familyMembers: normalized.familyMembers });
 
-    const updatedAdmission = await prisma.$transaction(async (tx) => {
-      if (data.previousSchools) {
-        await tx.previousSchools.deleteMany({ where: { applicationId: id } });
-        await tx.previousSchools.createMany({ data: data.previousSchools.map(s => ({ ...s, applicationId: id })) });
-      }
-      if (data.familyMembers) {
-        await tx.familyMembers.deleteMany({ where: { applicationId: id } });
-        await tx.familyMembers.createMany({ data: data.familyMembers.map(f => ({ ...f, applicationId: id })) });
+      // Automatically update student class if classId changed
+      if (normalized.classId && existing.studentId) {
+        await tx.student.update({ where: { id: existing.studentId }, data: { classId: normalized.classId } });
       }
 
-      const { previousSchools, familyMembers, ...appFields } = data;
-      return tx.application.update({ where: { id }, data: appFields });
+      return updatedApp;
     });
 
-    return NextResponse.json({ success: true, data: updatedAdmission });
+    return NextResponse.json({ success: true, admission });
   } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 });
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
+    if (err instanceof z.ZodError) {
+      const errors = err.errors.map((e) => ({ path: e.path, message: e.message }));
+      return NextResponse.json({ error: errors, status: 400 });
+    }
+    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
 
+// ------------------ DELETE admission ------------------
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const schoolAccount = await authorize(req);
-    const { id } = params;
+    const existing = await prisma.application.findUnique({ where: { id: params.id } });
+    if (!existing) return NextResponse.json({ error: "Admission not found" }, { status: 404 });
+    if (existing.schoolId !== schoolAccount.schoolId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const admission = await prisma.application.findUnique({ where: { id } });
-    if (!admission || admission.schoolId !== schoolAccount.schoolId)
-      return NextResponse.json({ error: "Admission not found" }, { status: 404 });
-
-    await prisma.application.delete({ where: { id } });
+    await prisma.application.delete({ where: { id: params.id } });
     return NextResponse.json({ success: true, message: "Admission deleted" });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
