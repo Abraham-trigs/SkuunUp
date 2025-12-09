@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { z } from "zod";
+import { z, ZodObject } from "zod";
 import { SchoolAccount } from "@/lib/schoolAccount";
 
 // ------------------ Zod Schemas ------------------
@@ -24,14 +24,16 @@ const PreviousSchoolSchema = z.object({
   endDate: z.coerce.date(),
 });
 
-const AdmissionSchema = z.object({
-  user: z.object({
-    surname: z.string(),
-    firstName: z.string(),
-    otherNames: z.string().optional(),
-    email: z.string().email(),
-    password: z.string(),
-  }),
+const UserSchema = z.object({
+  surname: z.string(),
+  firstName: z.string(),
+  otherNames: z.string().optional(),
+  email: z.string().email(),
+  password: z.string(),
+});
+
+const PartialAdmissionSchema = z.object({
+  user: UserSchema,
   classId: z.string().optional(),
   dateOfBirth: z.coerce.date().optional(),
   nationality: z.string().optional(),
@@ -68,7 +70,6 @@ const AdmissionSchema = z.object({
   progress: z.number().optional(),
   previousSchools: z.array(PreviousSchoolSchema).optional(),
   familyMembers: z.array(FamilyMemberSchema).optional(),
-  admissionPin: z.string().optional(),
 });
 
 // ------------------ Helpers ------------------
@@ -85,30 +86,66 @@ function normalizeForPrisma(data: any) {
   return out;
 }
 
-function calculateProgress(application: any) {
-  const steps = [
-    ["surname", "firstName", "otherNames", "dateOfBirth", "nationality", "sex"],
-    ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"],
-    ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"],
-    ["postalAddress", "residentialAddress", "wardMobile", "wardEmail", "emergencyContact", "emergencyMedicalContact"],
-    ["medicalSummary", "bloodType", "specialDisability"],
-    ["familyMembers", "previousSchools"],
-    ["feesAcknowledged", "declarationSigned", "signature"],
-  ];
+// Dynamic progress calculation
+const StepSchemas: ZodObject<any>[] = [
+  UserSchema,
+  z.object({
+    dateOfBirth: z.coerce.date().optional(),
+    nationality: z.string().optional(),
+    sex: z.string().optional(),
+  }),
+  z.object({
+    languages: z.array(z.string()).optional(),
+    mothersTongue: z.string().optional(),
+    religion: z.string().optional(),
+    denomination: z.string().optional(),
+    hometown: z.string().optional(),
+    region: z.string().optional(),
+  }),
+  z.object({
+    profilePicture: z.string().optional(),
+    wardLivesWith: z.string().optional(),
+    numberOfSiblings: z.number().optional(),
+    siblingsOlder: z.number().optional(),
+    siblingsYounger: z.number().optional(),
+  }),
+  z.object({
+    postalAddress: z.string().optional(),
+    residentialAddress: z.string().optional(),
+    wardMobile: z.string().optional(),
+    wardEmail: z.string().email().optional(),
+    emergencyContact: z.string().optional(),
+    emergencyMedicalContact: z.string().optional(),
+  }),
+  z.object({
+    medicalSummary: z.string().optional(),
+    bloodType: z.string().optional(),
+    specialDisability: z.string().optional(),
+  }),
+  z.object({
+    previousSchools: z.array(z.any()).optional(),
+    familyMembers: z.array(z.any()).optional(),
+  }),
+  z.object({
+    feesAcknowledged: z.boolean().optional(),
+    declarationSigned: z.boolean().optional(),
+    signature: z.string().optional(),
+  }),
+];
 
+function calculateDynamicProgress(data: any, schemas: ZodObject<any>[]) {
   let completedSteps = 0;
-
-  steps.forEach((stepFields) => {
-    const stepCompleted = stepFields.every((field) => {
-      const value = application[field];
+  schemas.forEach((schema) => {
+    const fields = Object.keys(schema.shape);
+    const stepComplete = fields.every((field) => {
+      const value = data[field];
       if (Array.isArray(value)) return value.length > 0;
       if (typeof value === "boolean") return value === true;
       return value !== undefined && value !== null && value !== "";
     });
-    if (stepCompleted) completedSteps += 1;
+    if (stepComplete) completedSteps += 1;
   });
-
-  return Math.round((completedSteps / steps.length) * 100);
+  return Math.round((completedSteps / schemas.length) * 100);
 }
 
 async function replaceNestedArraysTx(tx: any, applicationId: string, payload: { previousSchools?: any[]; familyMembers?: any[] }) {
@@ -128,60 +165,12 @@ async function replaceNestedArraysTx(tx: any, applicationId: string, payload: { 
   await Promise.all(promises);
 }
 
-// ------------------ GET list ------------------
-export async function GET(req: NextRequest) {
-  try {
-    const schoolAccount = await authorize(req);
-    const { searchParams } = new URL(req.url);
-
-    const cursor = searchParams.get("cursor") || undefined;
-    const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
-
-    const baseFilters: any = { schoolId: schoolAccount.schoolId };
-    const search = searchParams.get("search");
-    const where = search
-      ? {
-          AND: [
-            baseFilters,
-            {
-              OR: [
-                { surname: { contains: search, mode: "insensitive" } },
-                { firstName: { contains: search, mode: "insensitive" } },
-                { otherNames: { contains: search, mode: "insensitive" } },
-                { wardEmail: { contains: search, mode: "insensitive" } },
-              ],
-            },
-          ],
-        }
-      : baseFilters;
-
-    const admissions = await prisma.application.findMany({
-      where,
-      include: { student: { include: { user: true } }, previousSchools: true, familyMembers: true },
-      orderBy: { createdAt: "desc" },
-      take: limit + 1,
-      cursor: cursor ? { id: cursor } : undefined,
-      skip: cursor ? 1 : 0,
-    });
-
-    let nextCursor: string | null = null;
-    if (admissions.length > limit) {
-      const nextItem = admissions.pop();
-      nextCursor = nextItem!.id;
-    }
-
-    return NextResponse.json({ success: true, admissions, nextCursor });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
-  }
-}
-
 // ------------------ POST create ------------------
 export async function POST(req: NextRequest) {
   try {
     const schoolAccount = await authorize(req);
     const body = await req.json();
-    const parsed = AdmissionSchema.parse(body);
+    const parsed = PartialAdmissionSchema.parse(body);
     const normalized = normalizeForPrisma(parsed);
 
     const admission = await prisma.$transaction(async (tx) => {
@@ -244,8 +233,8 @@ export async function POST(req: NextRequest) {
         progress: 0,
       };
 
-      // calculate progress
-      appData.progress = calculateProgress({ ...appData, familyMembers: normalized.familyMembers, previousSchools: normalized.previousSchools });
+      // calculate dynamic progress
+      appData.progress = calculateDynamicProgress({ ...appData, previousSchools: normalized.previousSchools, familyMembers: normalized.familyMembers }, StepSchemas);
 
       const app = await tx.application.create({
         data: {
