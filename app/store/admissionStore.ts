@@ -1,12 +1,8 @@
 "use client";
 
-// app/stores/useAdmissionStore.ts
-// Store for managing student admission form with step-wise backend sync.
-
 import { create } from "zustand";
-import { z } from "zod";
+import { z, ZodObject } from "zod";
 import axios from "axios";
-import { useClassesStore } from "./useClassesStore";
 import { useAuthStore } from "./useAuthStore";
 
 // ------------------ Types ------------------
@@ -30,108 +26,90 @@ export type PreviousSchool = {
   endDate: string | Date;
 };
 
-export type SchoolClass = {
-  id: string;
-  name: string;
-  grade: string;
-};
+// ------------------ Step Fields ------------------
+const STEP_FIELDS: string[][] = [
+  ["surname", "firstName", "otherNames", "email", "password"], // Step 0: User
+  ["dateOfBirth", "nationality", "sex"], // Step 1
+  ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"], // Step 2
+  ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"], // Step 3
+  ["postalAddress", "residentialAddress", "wardMobile", "emergencyContact", "emergencyMedicalContact"], // Step 4
+  ["medicalSummary", "bloodType", "specialDisability"], // Step 5
+  ["previousSchools", "familyMembers"], // Step 6
+  ["feesAcknowledged", "declarationSigned", "signature"], // Step 7
+];
 
-// ------------------ Zod Schemas ------------------
-const FamilyMemberSchema = z.object({
-  relation: z.string(),
-  name: z.string(),
-  postalAddress: z.string(),
-  residentialAddress: z.string(),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
-  occupation: z.string().optional(),
-  workplace: z.string().optional(),
-  religion: z.string().optional(),
-  isAlive: z.boolean().optional(),
-});
-
-const PreviousSchoolSchema = z.object({
-  name: z.string(),
-  location: z.string(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
-});
-
+// ------------------ Admission Store Schema ------------------
 export const admissionFormSchema = z.object({
   applicationId: z.string().optional(),
   studentId: z.string().optional(),
-  admissionPin: z.string().optional(),
-  classId: z.string(),
-  surname: z.string(),
-  firstName: z.string(),
+  progress: z.number().default(0),
+  // Step 0
+  surname: z.string().optional(),
+  firstName: z.string().optional(),
   otherNames: z.string().optional(),
-  dateOfBirth: z.string(),
-  nationality: z.string(),
-  sex: z.string(),
-  languages: z.array(z.string()),
-  mothersTongue: z.string(),
-  religion: z.string(),
+  email: z.string().optional(),
+  password: z.string().optional(),
+  // Step 1
+  dateOfBirth: z.string().optional(),
+  nationality: z.string().optional(),
+  sex: z.string().optional(),
+  // Step 2
+  languages: z.array(z.string()).optional(),
+  mothersTongue: z.string().optional(),
+  religion: z.string().optional(),
   denomination: z.string().optional(),
-  hometown: z.string(),
-  region: z.string(),
+  hometown: z.string().optional(),
+  region: z.string().optional(),
+  // Step 3
   profilePicture: z.string().optional(),
-  wardLivesWith: z.string(),
+  wardLivesWith: z.string().optional(),
   numberOfSiblings: z.number().optional(),
   siblingsOlder: z.number().optional(),
   siblingsYounger: z.number().optional(),
-  postalAddress: z.string(),
-  residentialAddress: z.string(),
+  // Step 4
+  postalAddress: z.string().optional(),
+  residentialAddress: z.string().optional(),
   wardMobile: z.string().optional(),
-  wardEmail: z.string().optional(),
-  emergencyContact: z.string(),
+  emergencyContact: z.string().optional(),
   emergencyMedicalContact: z.string().optional(),
+  // Step 5
   medicalSummary: z.string().optional(),
   bloodType: z.string().optional(),
   specialDisability: z.string().optional(),
-  feesAcknowledged: z.boolean().default(false),
-  declarationSigned: z.boolean().default(false),
+  // Step 6
+  previousSchools: z.array(z.any()).optional(),
+  familyMembers: z.array(z.any()).optional(),
+  // Step 7
+  feesAcknowledged: z.boolean().optional(),
+  declarationSigned: z.boolean().optional(),
   signature: z.string().optional(),
-  classification: z.string().optional(),
-  submittedBy: z.string().optional(),
-  receivedBy: z.string().optional(),
-  receivedDate: z.string().optional(),
-  remarks: z.string().optional(),
-  previousSchools: z.array(PreviousSchoolSchema).optional(),
-  familyMembers: z.array(FamilyMemberSchema).optional(),
-  progress: z.number().default(0),
 });
 
-// ------------------ Step Definitions ------------------
-const STEP_FIELDS: string[][] = [
-  // Step 1: User + Student + minimal Application
-  ["surname", "firstName", "wardEmail", "dateOfBirth", "nationality", "sex", "classId"],
-  
-  // Step 2: Personal & linguistic info
-  ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"],
-  
-  // Step 3: Ward details
-  ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"],
-  
-  // Step 4: Contact & emergency info
-  ["postalAddress", "residentialAddress", "wardMobile", "wardEmail", "emergencyContact", "emergencyMedicalContact"],
-  
-  // Step 5: Medical info
-  ["medicalSummary", "bloodType", "specialDisability"],
-  
-  // Step 6: Previous schools & family
-  ["previousSchools", "familyMembers"],
-  
-  // Step 7: Fees & declaration
-  ["feesAcknowledged", "declarationSigned", "signature"],
-];
+// ------------------ Store Interface ------------------
+interface AdmissionStore {
+  formData: z.infer<typeof admissionFormSchema>;
+  loading: boolean;
+  errors: Record<string, string[]>;
+  userCreated: boolean;
 
+  setField: (field: string, value: any) => void;
+  setErrors: (errors: Record<string, string[]>) => void;
+  completeStep: (step: number) => Promise<boolean>;
+  fetchAdmission: (applicationId: string) => Promise<void>;
+  deleteAdmission: (applicationId: string) => Promise<boolean>;
+  loadStudentData: (admission: any) => void;
+  addFamilyMember: (member: FamilyMember) => void;
+  removeFamilyMember: (idx: number) => void;
+  addPreviousSchool: (school: PreviousSchool) => void;
+  removePreviousSchool: (idx: number) => void;
+}
 
-// ------------------ Helper: Progress Calculation ------------------
-function calculateProgress(formData: any) {
+// ------------------ Helpers ------------------
+function calculateProgress(data: any) {
   let completedSteps = 0;
   STEP_FIELDS.forEach((fields) => {
-    const stepComplete = fields.every((field) => {
-      const value = formData[field];
+    const stepComplete = fields.every((f) => {
+      const value = data[f];
       if (Array.isArray(value)) return value.length > 0;
       if (typeof value === "boolean") return value === true;
       return value !== undefined && value !== null && value !== "";
@@ -141,82 +119,51 @@ function calculateProgress(formData: any) {
   return Math.round((completedSteps / STEP_FIELDS.length) * 100);
 }
 
-// ------------------ Store Interface ------------------
-interface AdmissionStore {
-  formData: z.infer<typeof admissionFormSchema>;
-  availableClasses: SchoolClass[];
-  loading: boolean;
-  errors: Record<string, string[]>;
-  userCreated: boolean;
-
-  setField: (field: string, value: any) => void;
-  setErrors: (errors: Record<string, string[]>) => void;
-
-  completeStep: (step: number) => Promise<boolean>;
-  fetchStudentAdmission: (applicationId: string) => Promise<void>;
-  deleteAdmission: (applicationId: string) => Promise<boolean>;
-  fetchClasses: () => Promise<void>;
-  loadStudentData: (admission: any) => void;
-
-  addFamilyMember: (member: FamilyMember) => void;
-  removeFamilyMember: (idx: number) => void;
-  addPreviousSchool: (school: PreviousSchool) => void;
-  removePreviousSchool: (idx: number) => void;
-}
-
 // ------------------ Store Implementation ------------------
 export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
-  formData: admissionFormSchema.partial().parse({ admissionPin: "" }),
-  availableClasses: [],
+  formData: admissionFormSchema.partial().parse({}),
   loading: false,
   errors: {},
   userCreated: false,
 
-  setField: (field, value) => {
+  setField: (field, value) =>
     set((state) => {
-      const keys = field.split(".");
-      let obj: any = state.formData;
-      for (let i = 0; i < keys.length - 1; i++) obj = obj[keys[i]];
-      obj[keys[keys.length - 1]] = value;
+      state.formData[field] = value;
       state.formData.progress = calculateProgress(state.formData);
       return { formData: state.formData };
-    });
-  },
+    }),
 
   setErrors: (errors) => set({ errors }),
 
-  // ------------------ Complete Step ------------------
   completeStep: async (step) => {
     set({ loading: true, errors: {} });
     try {
-      const stepFields = STEP_FIELDS[step - 1];
       const payload: any = {};
-      stepFields.forEach((f) => (payload[f] = get().formData[f]));
+      STEP_FIELDS[step].forEach((f) => {
+        payload[f] = get().formData[f];
+      });
 
-      const schoolId = useAuthStore.getState().user?.school.id;
+      const schoolId = useAuthStore.getState().user?.school?.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
-      if (step === 1) {
-        // Step 1 = create user + student + application
-        const res = await axios.post("/api/admissions", payload, { headers: { "X-School-ID": schoolId } });
-        const app = res.data.admission;
+      let res;
+      if (step === 0) {
+        // Create user + student + application
+        res = await axios.post("/api/admission", { ...payload, step }, { headers: { "X-School-ID": schoolId } });
+        const admission = res.data.admission;
         set((state) => ({
-          formData: { ...state.formData, studentId: app.studentId, applicationId: app.id },
+          formData: { ...state.formData, studentId: admission.studentId, applicationId: admission.id },
           userCreated: true,
         }));
       } else {
-        // Steps 2-8 = patch existing admission
         const appId = get().formData.applicationId;
         if (!appId) throw new Error("Application ID missing");
-
-        await axios.patch(`/api/admissions/${appId}`, payload, { headers: { "X-School-ID": schoolId } });
+        res = await axios.patch(`/api/admission/${appId}`, { ...payload, step }, { headers: { "X-School-ID": schoolId } });
       }
 
-      // Recalculate progress locally
-      set((state) => {
-        const formWithProgress = { ...state.formData, progress: calculateProgress(state.formData) };
-        return { formData: formWithProgress };
-      });
+      set((state) => ({
+        formData: { ...state.formData, progress: calculateProgress(state.formData) },
+      }));
 
       return true;
     } catch (err: any) {
@@ -227,17 +174,15 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     }
   },
 
-  // ------------------ Fetch Admission ------------------
-  fetchStudentAdmission: async (applicationId) => {
+  fetchAdmission: async (applicationId) => {
     set({ loading: true, errors: {} });
     try {
-      const schoolId = useAuthStore.getState().user?.school.id;
+      const schoolId = useAuthStore.getState().user?.school?.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
-
-      const res = await axios.get(`/api/admissions/${applicationId}`, { headers: { "X-School-ID": schoolId } });
-      get().loadStudentData(res.data.admission || res.data);
+      const res = await axios.get(`/api/admission/${applicationId}`, { headers: { "X-School-ID": schoolId } });
+      get().loadStudentData(res.data.application || res.data);
     } catch (err: any) {
-      set({ errors: { fetchStudentAdmission: [err.response?.data?.error || err.message || "Failed to fetch admission"] } });
+      set({ errors: { fetchAdmission: [err?.response?.data?.error || err.message || "Fetch failed"] } });
     } finally {
       set({ loading: false });
     }
@@ -246,28 +191,24 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   deleteAdmission: async (applicationId) => {
     set({ loading: true, errors: {} });
     try {
-      const schoolId = useAuthStore.getState().user?.school.id;
+      const schoolId = useAuthStore.getState().user?.school?.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
-
-      await axios.delete(`/api/admissions/${applicationId}`, { headers: { "X-School-ID": schoolId } });
-      set({ formData: admissionFormSchema.partial().parse({ admissionPin: "" }), userCreated: false });
+      await axios.delete(`/api/admission/${applicationId}`, { headers: { "X-School-ID": schoolId } });
+      set({ formData: admissionFormSchema.partial().parse({}), userCreated: false });
       return true;
     } catch (err: any) {
-      set({ errors: { deleteAdmission: [err.response?.data?.error || err.message || "Failed to delete admission"] } });
+      set({ errors: { deleteAdmission: [err?.response?.data?.error || err.message || "Delete failed"] } });
       return false;
     } finally {
       set({ loading: false });
     }
   },
 
-  fetchClasses: async () => {
-    try {
-      await useClassesStore.getState().fetchClasses(1, 100);
-      set({ availableClasses: useClassesStore.getState().classes });
-    } catch (err) {
-      console.error(err);
-      set({ availableClasses: [] });
-    }
+  loadStudentData: (admission) => {
+    if (!admission) return;
+    const formData: any = { ...admission };
+    formData.progress = calculateProgress(formData);
+    set({ formData, userCreated: true });
   },
 
   addFamilyMember: (member) =>
@@ -301,89 +242,4 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       formWithProgress.progress = calculateProgress(formWithProgress);
       return { formData: formWithProgress };
     }),
-
-  loadStudentData: (admission) => {
-    if (!admission) return;
-    const formData = {
-      applicationId: admission.id,
-      studentId: admission.student?.id,
-      classId: admission.student?.classId || "",
-      surname: admission.surname,
-      firstName: admission.firstName,
-      otherNames: admission.otherNames,
-      dateOfBirth: new Date(admission.dateOfBirth),
-      nationality: admission.nationality,
-      sex: admission.sex,
-      languages: admission.languages,
-      mothersTongue: admission.mothersTongue,
-      religion: admission.religion,
-      denomination: admission.denomination,
-      hometown: admission.hometown,
-      region: admission.region,
-      profilePicture: admission.profilePicture,
-      wardLivesWith: admission.wardLivesWith,
-      numberOfSiblings: admission.numberOfSiblings,
-      siblingsOlder: admission.siblingsOlder,
-      siblingsYounger: admission.siblingsYounger,
-      postalAddress: admission.postalAddress,
-      residentialAddress: admission.residentialAddress,
-      wardMobile: admission.wardMobile,
-      wardEmail: admission.student?.user?.email,
-      emergencyContact: admission.emergencyContact,
-      emergencyMedicalContact: admission.emergencyMedicalContact,
-      medicalSummary: admission.medicalSummary,
-      bloodType: admission.bloodType,
-      specialDisability: admission.specialDisability,
-      feesAcknowledged: admission.feesAcknowledged,
-      declarationSigned: admission.declarationSigned,
-      signature: admission.signature,
-      classification: admission.classification,
-      submittedBy: admission.submittedBy,
-      receivedBy: admission.receivedBy,
-      receivedDate: admission.receivedDate ? new Date(admission.receivedDate) : null,
-      remarks: admission.remarks,
-      previousSchools: admission.previousSchools || [],
-      familyMembers: admission.familyMembers || [],
-    };
-    formData.progress = calculateProgress(formData);
-    set({ formData, userCreated: true });
-  },
 }));
-
-
-
-// ✅ Design Reasoning
-
-// Step 1 ensures user, student, and minimal application creation.
-
-// Steps 2–6 and 8 are partial updates, mapped explicitly to field groups.
-
-// Step 7 bulk replaces nested arrays (previousSchools and familyMembers) in line with the backend PATCH route.
-
-// Progress is calculated after every step.
-
-// Structure
-
-// formData – Holds all fields.
-
-// STEP_FIELDS – Explicit step-to-field mapping.
-
-// completeStep(step: number) – Central method to sync step with backend.
-
-// Helpers for family/previous school array updates.
-
-// Load, fetch, delete admission and fetch classes.
-
-// Implementation Guidance
-
-// Call completeStep(stepNumber) after each step.
-
-// Step 1 triggers creation, subsequent steps trigger PATCH.
-
-// Use loadStudentData to populate store from backend.
-
-// Scalability Insight
-
-// New steps or nested arrays can be added by updating STEP_FIELDS and backend accordingly.
-
-// completeStep abstracts step-wise sync, making it future-proof for multi-step forms.
