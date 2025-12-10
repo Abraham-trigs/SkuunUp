@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { Class } from "@prisma/client";
 import axios from "axios";
-import { useStudentStore, StudentListItem } from "./studentStore";
+import { useStudentStore, StudentListItem } from "./useStudentStore.ts";
 
 // ------------------ Types ------------------
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";

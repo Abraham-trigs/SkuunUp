@@ -46,7 +46,9 @@ export default function AddClassModal({ isOpen, onClose }: AddClassModalProps) {
         return;
       }
 
-      toast.success(`Class "${name}" created successfully!`);
+      toast.success(
+        `Class "${name}" created successfully with grades: A, B, C!`
+      );
       setName("");
       onClose();
     } catch (err) {
@@ -69,10 +71,14 @@ export default function AddClassModal({ isOpen, onClose }: AddClassModalProps) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border px-3 py-2 rounded"
+              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-ford-primary"
               placeholder="Enter class name"
               required
+              autoFocus
             />
+            <p className="text-gray-500 text-sm mt-1">
+              Grades "A", "B", and "C" will be created automatically.
+            </p>
           </div>
 
           {error && <p className="text-red-500 text-sm">{error}</p>}

@@ -1,5 +1,5 @@
 // app/components/admission/MultiStepAdmissionForm.tsx
-// Purpose: Multi-step student admission form with labels above inputs, enhanced buttons, and animated step indicators using Framer Motion
+// Purpose: Multi-step student admission form with dynamic class & grade selection, labels above inputs, enhanced buttons, animated step indicators, and full validation using React Hook Form + Zod
 
 "use client";
 
@@ -10,6 +10,7 @@ import {
   admissionFormSchema,
   useAdmissionStore,
 } from "@/app/store/admissionStore.ts";
+import { useClassesStore } from "@/app/store/useClassesStore.ts";
 import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -49,9 +50,11 @@ const LabeledInput: React.FC<LabeledInputProps> = ({
 );
 
 export default function MultiStepAdmissionForm() {
-  const router = useRouter(); // initialize router
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const { formData, setField, completeStep, loading } = useAdmissionStore();
+  const { classes } = useClassesStore();
+  const MAX_CLASS_SIZE = 30;
 
   const methods = useForm<z.infer<typeof admissionFormSchema>>({
     defaultValues: formData,
@@ -63,6 +66,8 @@ export default function MultiStepAdmissionForm() {
     handleSubmit,
     register,
     control,
+    watch,
+    setValue,
     formState: { errors },
   } = methods;
 
@@ -73,18 +78,15 @@ export default function MultiStepAdmissionForm() {
   const familyArray = useFieldArray({ control, name: "familyMembers" });
   const previousArray = useFieldArray({ control, name: "previousSchools" });
 
+  const selectedClassId = watch("classId");
+  const selectedClass = classes.find((cls) => cls.id === selectedClassId);
+
   const onNext = async (data: any) => {
     Object.keys(data).forEach((key) => setField(key, data[key]));
     const success = await completeStep(currentStep);
-
     if (!success) return;
-
-    if (currentStep < STEP_TITLES.length - 1) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      // Final step completed → redirect to dashboard
-      router.push("/dashboard");
-    }
+    if (currentStep < STEP_TITLES.length - 1) setCurrentStep(currentStep + 1);
+    else router.push("/dashboard");
   };
 
   const onBack = () => setCurrentStep((prev) => Math.max(prev - 1, 0));
@@ -153,6 +155,64 @@ export default function MultiStepAdmissionForm() {
                 </span>
               )}
             </div>
+            <div className="flex flex-col w-full mb-4">
+              <label className="mb-1 text-gray-700 font-medium">
+                Select Class
+              </label>
+              <select
+                {...register("classId")}
+                onChange={(e) => {
+                  setValue("classId", e.target.value);
+                  if (selectedClass?.grades?.length) setValue("grade", "");
+                }}
+                className="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Class</option>
+                {classes.map((cls) => (
+                  <option
+                    key={cls.id}
+                    value={cls.id}
+                    disabled={cls.studentCount >= MAX_CLASS_SIZE}
+                  >
+                    {cls.name}{" "}
+                    {cls.studentCount >= MAX_CLASS_SIZE ? "(Full)" : ""}
+                  </option>
+                ))}
+              </select>
+              {errors.classId && (
+                <span className="text-red-600 text-xs mt-1">
+                  {errors.classId.message}
+                </span>
+              )}
+            </div>
+            {selectedClass && selectedClass.grades && (
+              <div className="flex flex-col w-full mb-4">
+                <label className="mb-1 text-gray-700 font-medium">
+                  Select Grade
+                </label>
+                <select
+                  {...register("grade")}
+                  className="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Grade</option>
+                  {selectedClass.grades.map((grade) => (
+                    <option
+                      key={grade.id}
+                      value={grade.id}
+                      disabled={grade.studentCount >= MAX_CLASS_SIZE}
+                    >
+                      {grade.name}{" "}
+                      {grade.studentCount >= MAX_CLASS_SIZE ? "(Full)" : ""}
+                    </option>
+                  ))}
+                </select>
+                {errors.grade && (
+                  <span className="text-red-600 text-xs mt-1">
+                    {errors.grade.message}
+                  </span>
+                )}
+              </div>
+            )}
           </>
         );
       case 2:
@@ -323,6 +383,7 @@ export default function MultiStepAdmissionForm() {
             >
               Add Previous School
             </button>
+
             <h4 className="font-semibold mt-4 mb-2">Family Members</h4>
             {familyArray.fields.map((item, idx) => (
               <div
@@ -409,7 +470,6 @@ export default function MultiStepAdmissionForm() {
       >
         <h2 className="text-xl font-bold mb-4">{STEP_TITLES[currentStep]}</h2>
 
-        {/* Step indicators with Framer Motion */}
         <div className="flex items-center justify-between mb-4">
           {STEP_TITLES.map((title, index) => {
             const isActive = index === currentStep;
@@ -439,7 +499,6 @@ export default function MultiStepAdmissionForm() {
           })}
         </div>
 
-        {/* Progress bar */}
         <div className="w-full bg-gray-200 h-2 rounded mb-4">
           <div
             className="bg-blue-600 h-2 rounded transition-all"
@@ -494,8 +553,11 @@ export default function MultiStepAdmissionForm() {
 }
 
 /*
-Design reasoning → Labels above inputs improve readability and accessibility; animated step indicators and progress bar provide clear visual guidance. Buttons now have hover feedback for better UX.
-Structure → LabeledInput, MultiStepAdmissionForm; dynamic arrays for family/previous schools; Framer Motion for smooth step transitions.
-Implementation guidance → Install framer-motion; drop into project; responsive layout.
-Scalability insight → Adding new steps auto-updates indicators and progress bar; LabeledInput reusable in other forms.
+Design reasoning → Dynamic grades under selected class improve UX by showing availability and preventing overfilling. Labels above inputs enhance readability; animated steps give clear visual guidance.
+
+Structure → Single MultiStepAdmissionForm component with LabeledInput, dynamic class & grade dropdowns, arrays for previous schools and family members, Framer Motion for transitions.
+
+Implementation guidance → Drop into project, ensure classes store includes grades array with studentCount. React Hook Form + Zod provides client validation.
+
+Scalability insight → New steps auto-integrate with indicators/progress; grade logic supports unlimited classes/grades; UX handles full capacities without extra server calls.
 */
