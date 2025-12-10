@@ -1,14 +1,16 @@
+// app/api/classes/[classId]/grades/[gradeId]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
 
+// -------------------- Schemas --------------------
 const gradeSchema = z.object({
   name: z.string().min(1, "Grade name is required"),
 });
 
 // -------------------- PUT Update Grade --------------------
-export async function PUT(req: Request, { params }: { params: { id: string; gradeId: string } }) {
+export async function PUT(req: Request, { params }: { params: { classId: string; gradeId: string } }) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
@@ -32,7 +34,7 @@ export async function PUT(req: Request, { params }: { params: { id: string; grad
 }
 
 // -------------------- DELETE Grade --------------------
-export async function DELETE(req: Request, { params }: { params: { id: string; gradeId: string } }) {
+export async function DELETE(req: Request, { params }: { params: { classId: string; gradeId: string } }) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)

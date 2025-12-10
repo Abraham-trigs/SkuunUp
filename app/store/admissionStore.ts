@@ -1,7 +1,8 @@
+// app/stores/admissionStore.ts
 "use client";
 
 import { create } from "zustand";
-import { z, ZodObject } from "zod";
+import { z } from "zod";
 import axios from "axios";
 import { useAuthStore } from "./useAuthStore.ts";
 
@@ -26,16 +27,23 @@ export type PreviousSchool = {
   endDate: string | Date;
 };
 
+export type GradeOption = {
+  id: string;
+  name: string;
+  capacity: number;
+  enrolled: number;
+};
+
 // ------------------ Step Fields ------------------
 const STEP_FIELDS: string[][] = [
-  ["surname", "firstName", "otherNames", "email", "password"], // Step 0: User
+  ["surname", "firstName", "otherNames", "email", "password"], // Step 0
   ["dateOfBirth", "nationality", "sex"], // Step 1
   ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"], // Step 2
   ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"], // Step 3
   ["postalAddress", "residentialAddress", "wardMobile", "emergencyContact", "emergencyMedicalContact"], // Step 4
   ["medicalSummary", "bloodType", "specialDisability"], // Step 5
   ["previousSchools", "familyMembers"], // Step 6
-  ["feesAcknowledged", "declarationSigned", "signature"], // Step 7
+  ["feesAcknowledged", "declarationSigned", "signature", "classId", "gradeId"], // Step 7
 ];
 
 // ------------------ Admission Store Schema ------------------
@@ -83,6 +91,8 @@ export const admissionFormSchema = z.object({
   feesAcknowledged: z.boolean().optional(),
   declarationSigned: z.boolean().optional(),
   signature: z.string().optional(),
+  classId: z.string().optional(),
+  gradeId: z.string().optional(),
 });
 
 // ------------------ Store Interface ------------------
@@ -102,6 +112,10 @@ interface AdmissionStore {
   removeFamilyMember: (idx: number) => void;
   addPreviousSchool: (school: PreviousSchool) => void;
   removePreviousSchool: (idx: number) => void;
+
+  // Class / grade helpers
+  setClass: (classId: string, grades: GradeOption[]) => void;
+  selectGrade: (gradeId?: string, grades?: GradeOption[]) => void;
 }
 
 // ------------------ Helpers ------------------
@@ -139,16 +153,13 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     set({ loading: true, errors: {} });
     try {
       const payload: any = {};
-      STEP_FIELDS[step].forEach((f) => {
-        payload[f] = get().formData[f];
-      });
+      STEP_FIELDS[step].forEach((f) => (payload[f] = get().formData[f]));
 
       const schoolId = useAuthStore.getState().user?.school?.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
       let res;
       if (step === 0) {
-        // Create user + student + application
         res = await axios.post("/api/admissions", { ...payload, step }, { headers: { "X-School-ID": schoolId } });
         const admission = res.data.admission;
         set((state) => ({
@@ -242,4 +253,43 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       formWithProgress.progress = calculateProgress(formWithProgress);
       return { formData: formWithProgress };
     }),
+
+  // ------------------ Class / Grade Logic ------------------
+  setClass: (classId: string, grades: GradeOption[]) => {
+    const availableGrade = grades.find((g) => g.enrolled < g.capacity);
+    set((state) => ({
+      formData: {
+        ...state.formData,
+        classId,
+        gradeId: availableGrade?.id,
+        progress: calculateProgress({ ...state.formData, classId, gradeId: availableGrade?.id }),
+      },
+    }));
+  },
+
+  selectGrade: (gradeId?: string, grades?: GradeOption[]) => {
+    if (gradeId) {
+      set((state) => ({
+        formData: {
+          ...state.formData,
+          gradeId,
+          progress: calculateProgress({ ...state.formData, gradeId }),
+        },
+      }));
+    } else if (grades) {
+      const availableGrade = grades.find((g) => g.enrolled < g.capacity);
+      set((state) => ({
+        formData: {
+          ...state.formData,
+          gradeId: availableGrade?.id,
+          progress: calculateProgress({ ...state.formData, gradeId: availableGrade?.id }),
+        },
+      }));
+    }
+  },
 }));
+
+// ------------------ Notes ------------------
+// Tracks all steps, fields, and dynamic arrays (family/previous schools).
+// Auto-selects grades with capacity and calculates progress automatically.
+// Integrates seamlessly with multi-step admission form.

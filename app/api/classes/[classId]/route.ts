@@ -1,4 +1,4 @@
-// app/api/classes/[id]/route.ts
+// app/api/classes/[classId]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
@@ -10,14 +10,14 @@ const updateClassSchema = z.object({
 });
 
 // -------------------- GET Single Class --------------------
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { classId: string } }) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const cls = await prisma.class.findUnique({
-      where: { id: params.id },
+      where: { id: params.classId },
       include: {
         grades: { select: { id: true, name: true } },
         staff: {
@@ -69,7 +69,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 }
 
 // -------------------- PUT Update Class --------------------
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: { classId: string } }) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
@@ -79,7 +79,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const data = updateClassSchema.parse(body);
 
     const updatedClass = await prisma.class.update({
-      where: { id: params.id },
+      where: { id: params.classId },
       data,
       include: { grades: true },
     });
@@ -94,13 +94,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 }
 
 // -------------------- DELETE Class --------------------
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: { classId: string } }) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    await prisma.class.delete({ where: { id: params.id } });
+    await prisma.class.delete({ where: { id: params.classId } });
 
     return NextResponse.json({ message: "Class deleted successfully" });
   } catch (err: any) {

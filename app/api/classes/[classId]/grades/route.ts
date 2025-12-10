@@ -1,3 +1,4 @@
+// app/api/classes/[classId]/grades/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
@@ -5,20 +6,20 @@ import { z } from "zod";
 
 // -------------------- Schemas --------------------
 
-// Create or update grade
+// Create Grade
 const gradeSchema = z.object({
   name: z.string().min(1, "Grade name is required"),
 });
 
 // -------------------- GET Grades for a Class --------------------
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { classId: string } }) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const grades = await prisma.grade.findMany({
-      where: { classId: params.id },
+      where: { classId: params.classId },
       orderBy: { name: "asc" },
     });
 
@@ -29,7 +30,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 }
 
 // -------------------- POST Create Grade --------------------
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { classId: string } }) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
@@ -41,7 +42,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const newGrade = await prisma.grade.create({
       data: {
         name: data.name,
-        classId: params.id,
+        classId: params.classId,
       },
     });
 

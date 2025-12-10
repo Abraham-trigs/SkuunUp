@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { Class } from "@prisma/client";
+import { Class, Grade } from "@prisma/client";
 import axios from "axios";
 import { useStudentStore, StudentListItem } from "./useStudentStore.ts";
 
@@ -27,6 +27,7 @@ interface ClassesStore {
   selectedClass: Class | null;
   students: StudentListItem[];
   attendance: AttendanceRecord[];
+  grades: Grade[];
 
   search: string;
   sortBy: "name" | "createdAt";
@@ -34,16 +35,25 @@ interface ClassesStore {
   dateFilter?: string;
   cache: Record<string, Class[]>;
 
+  // ------------------ Fetching ------------------
   fetchClasses: (page?: number, perPage?: number, search?: string) => Promise<void>;
   fetchClassById: (id: string) => Promise<void>;
   fetchStudents: (classId: string) => Promise<void>;
   fetchAttendance: (classId: string, date?: string) => Promise<void>;
+  fetchGrades: (classId: string) => Promise<void>;
 
+  // ------------------ Mutations ------------------
   createClass: (name: string) => Promise<{ success: boolean; data?: Class; error?: string }>;
   updateClass: (id: string, name?: string) => Promise<boolean>;
   deleteClass: (id: string) => Promise<void>;
+
+  createGrade: (classId: string, name: string) => Promise<Grade | null>;
+  updateGrade: (classId: string, gradeId: string, name: string) => Promise<Grade | null>;
+  deleteGrade: (classId: string, gradeId: string) => Promise<boolean>;
+
   markAttendance: (classId: string, records: AttendanceRecord[], date?: string) => Promise<void>;
 
+  // ------------------ Helpers ------------------
   selectClass: (cls: Class) => void;
   clearSelectedClass: () => void;
 
@@ -64,13 +74,14 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   selectedClass: null,
   students: [],
   attendance: [],
+  grades: [],
   search: "",
   sortBy: "name",
   sortOrder: "asc",
   dateFilter: undefined,
   cache: {},
 
-  // ------------------ Classes ------------------
+  // ------------------ Fetching ------------------
   fetchClasses: async (page = get().page, perPage = get().perPage, search = get().search) => {
     set({ loading: true, error: null });
     const { sortBy, sortOrder, dateFilter, cache } = get();
@@ -102,7 +113,11 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await axios.get(`/api/classes/${id}`);
-      set({ selectedClass: res.data.class, loading: false });
+      set({
+        selectedClass: res.data,
+        grades: res.data.grades || [],
+        loading: false,
+      });
     } catch (err: any) {
       set({ error: err.response?.data?.error || err.message, loading: false });
     }
@@ -112,7 +127,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ loading: true });
     try {
       const studentStore = useStudentStore.getState();
-      await studentStore.fetchStudents(1, 20, ""); // Fetch first page
+      await studentStore.fetchStudents(1, 20, "");
       const students = studentStore.students.filter((s) => s.classId === classId);
       set({ students, loading: false });
     } catch (err: any) {
@@ -125,6 +140,16 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     try {
       const res = await axios.get(`/api/classes/${classId}/attendance?date=${date || ""}`);
       set({ attendance: res.data || [], loading: false });
+    } catch (err: any) {
+      set({ error: err.response?.data?.error || err.message, loading: false });
+    }
+  },
+
+  fetchGrades: async (classId: string) => {
+    set({ loading: true });
+    try {
+      const res = await axios.get(`/api/classes/${classId}/grades`);
+      set({ grades: res.data || [], loading: false });
     } catch (err: any) {
       set({ error: err.response?.data?.error || err.message, loading: false });
     }
@@ -174,6 +199,45 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     }
   },
 
+  createGrade: async (classId: string, name: string) => {
+    set({ loading: true });
+    try {
+      const res = await axios.post(`/api/classes/${classId}/grades`, { name });
+      set((state) => ({ grades: [...state.grades, res.data], loading: false }));
+      return res.data;
+    } catch (err: any) {
+      set({ error: err.response?.data?.error || err.message, loading: false });
+      return null;
+    }
+  },
+
+  updateGrade: async (classId: string, gradeId: string, name: string) => {
+    set({ loading: true });
+    try {
+      const res = await axios.put(`/api/classes/${classId}/grades/${gradeId}`, { name });
+      set((state) => ({
+        grades: state.grades.map((g) => (g.id === gradeId ? res.data : g)),
+        loading: false,
+      }));
+      return res.data;
+    } catch (err: any) {
+      set({ error: err.response?.data?.error || err.message, loading: false });
+      return null;
+    }
+  },
+
+  deleteGrade: async (classId: string, gradeId: string) => {
+    set({ loading: true });
+    try {
+      await axios.delete(`/api/classes/${classId}/grades/${gradeId}`);
+      set((state) => ({ grades: state.grades.filter((g) => g.id !== gradeId), loading: false }));
+      return true;
+    } catch (err: any) {
+      set({ error: err.response?.data?.error || err.message, loading: false });
+      return false;
+    }
+  },
+
   markAttendance: async (classId: string, records: AttendanceRecord[], date?: string) => {
     set({ loading: true });
     try {
@@ -186,8 +250,17 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   },
 
   // ------------------ Helpers ------------------
-  selectClass: (cls: Class) => set({ selectedClass: { ...cls } }),
-  clearSelectedClass: () => set({ selectedClass: null }),
+  selectClass: async (cls: Class) => {
+    set({ selectedClass: { ...cls }, grades: [], students: [], attendance: [] });
+    try {
+      const res = await axios.get(`/api/classes/${cls.id}/grades`);
+      set({ grades: res.data || [] });
+    } catch (err: any) {
+      set({ error: err.response?.data?.error || err.message });
+    }
+  },
+
+  clearSelectedClass: () => set({ selectedClass: null, grades: [], students: [], attendance: [] }),
 
   setSearch: (search: string) => {
     set({ search, page: 1 });
@@ -204,18 +277,3 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     get().fetchClasses(1);
   },
 }));
-
-
-// ✅ Notes & Improvements:
-
-// Students are fetched via the main /api/students API using the student store, avoiding nested routes.
-
-// Paginated, RESTful classes API fully integrated.
-
-// Grades/sections are included via the classId reference.
-
-// Attendance endpoint works with optional date filters.
-
-// Fully typed with AttendanceRecord and StudentListItem.
-
-// Cache for classes is maintained per query page/search/sort.
