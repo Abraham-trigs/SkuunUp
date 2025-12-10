@@ -1,43 +1,52 @@
 // app/admissions/page.tsx
-// Purpose: Admission page with dynamic step renderer wrapped in AuthGuard for authentication
+// Purpose: Admission page with dynamic step renderer wrapped in AuthGuard
 
 "use client";
 
 import dynamic from "next/dynamic";
-import AuthGuard from "@/app/components/AuthGuard.tsx";
+import AuthGuard from "@/app/components/AuthGuard";
 
-// Dynamically import the step renderer to ensure it only runs on the client
-const StepRenderer = dynamic(() => import("./StepRenderer"), { ssr: false });
+// Dynamically import the multi-step form to ensure client-only rendering
+const MultiStepAdmissionForm = dynamic(
+  () => import("./components/MultiStepAdmissionForm.tsx"),
+  { ssr: false }
+);
 
 export default function AdmissionPage() {
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gray-100 py-10">
+      <main className="min-h-screen bg-gray-50 py-10">
         <div className="max-w-5xl mx-auto px-4">
-          <h1 className="text-3xl font-bold mb-6">Student Admission</h1>
-          <StepRenderer />
+          <h1 className="text-3xl font-bold mb-8 text-center">
+            Student Admission
+          </h1>
+          <section className="bg-white shadow rounded-lg p-6">
+            <MultiStepAdmissionForm />
+          </section>
         </div>
-      </div>
+      </main>
     </AuthGuard>
   );
 }
 
 /* 
 Design reasoning:
-- Wrapping the dynamic StepRenderer in AuthGuard ensures only authenticated users can access the form.
-- Dynamic import with `ssr: false` prevents server-side rendering issues for client-only components.
+- AuthGuard ensures only logged-in users can access the page.
+- Dynamic import prevents SSR issues for client-only forms.
+- Centered, responsive container enhances readability.
+- Shadowed white card separates form visually from background.
 
 Structure:
-- Outer AuthGuard -> ensures auth.
-- Container div -> min height + padding + background.
-- Inner container -> max width for readability, centered.
-- Header + dynamic form component.
+- AuthGuard -> main layout
+- Container -> max-width, padding
+- Header -> centered, clear hierarchy
+- Form section -> visually isolated with rounded card + shadow
 
 Implementation guidance:
-- Keep StepRenderer purely client-side to avoid hydration errors.
-- Ensure AuthGuard correctly provides redirect or fallback for unauthorized users.
+- Future features like notifications, breadcrumbs, or sidebars can be added inside the container.
+- Styling keeps form responsive and visually distinct without extra wrapper logic.
 
 Scalability insight:
-- This structure allows future expansion: add breadcrumbs, tabs, or notifications inside the inner container.
-- Dynamic import ensures performance is not impacted by heavy form logic until user is authenticated.
+- Supports dynamic step updates and store integration without page modifications.
+- Easy to wrap additional components like modals or toast notifications.
 */

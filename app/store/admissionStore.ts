@@ -149,7 +149,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       let res;
       if (step === 0) {
         // Create user + student + application
-        res = await axios.post("/api/admission", { ...payload, step }, { headers: { "X-School-ID": schoolId } });
+        res = await axios.post("/api/admissions", { ...payload, step }, { headers: { "X-School-ID": schoolId } });
         const admission = res.data.admission;
         set((state) => ({
           formData: { ...state.formData, studentId: admission.studentId, applicationId: admission.id },
@@ -158,7 +158,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       } else {
         const appId = get().formData.applicationId;
         if (!appId) throw new Error("Application ID missing");
-        res = await axios.patch(`/api/admission/${appId}`, { ...payload, step }, { headers: { "X-School-ID": schoolId } });
+        res = await axios.patch(`/api/admissions/${appId}`, { ...payload, step }, { headers: { "X-School-ID": schoolId } });
       }
 
       set((state) => ({
@@ -179,7 +179,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     try {
       const schoolId = useAuthStore.getState().user?.school?.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
-      const res = await axios.get(`/api/admission/${applicationId}`, { headers: { "X-School-ID": schoolId } });
+      const res = await axios.get(`/api/admissions/${applicationId}`, { headers: { "X-School-ID": schoolId } });
       get().loadStudentData(res.data.application || res.data);
     } catch (err: any) {
       set({ errors: { fetchAdmission: [err?.response?.data?.error || err.message || "Fetch failed"] } });
@@ -193,7 +193,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     try {
       const schoolId = useAuthStore.getState().user?.school?.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
-      await axios.delete(`/api/admission/${applicationId}`, { headers: { "X-School-ID": schoolId } });
+      await axios.delete(`/api/admissions/${applicationId}`, { headers: { "X-School-ID": schoolId } });
       set({ formData: admissionFormSchema.partial().parse({}), userCreated: false });
       return true;
     } catch (err: any) {
