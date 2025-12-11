@@ -10,14 +10,23 @@ async function authorize(req: NextRequest) {
   return schoolAccount;
 }
 
-// ------------------ GET: List Students ------------------
+function parsePagination(req: NextRequest) {
+  const params = Object.fromEntries(req.nextUrl.searchParams.entries());
+  const page = Math.max(parseInt(params.page || "1"), 1);
+  const perPage = Math.max(parseInt(params.perPage || "20"), 1);
+  const sortBy = params.sortBy || "surname";
+  const sortOrder: "asc" | "desc" = (params.sortOrder as any) === "desc" ? "desc" : "asc";
+  const search = params.search || "";
+  const classId = params.classId;
+  const gradeId = params.gradeId;
+  return { page, perPage, sortBy, sortOrder, search, classId, gradeId };
+}
+
+// ------------------ GET / POST /api/students ------------------
 export async function GET(req: NextRequest) {
   try {
     const schoolAccount = await authorize(req);
-    const { search = "", page = "1", perPage = "20", classId, gradeId } = Object.fromEntries(req.nextUrl.searchParams.entries());
-
-    const pageNum = parseInt(page as string) || 1;
-    const perPageNum = parseInt(perPage as string) || 20;
+    const { page, perPage, sortBy, sortOrder, search, classId, gradeId } = parsePagination(req);
 
     const where: any = { schoolId: schoolAccount.schoolId };
     if (search) {
@@ -34,15 +43,15 @@ export async function GET(req: NextRequest) {
     const total = await prisma.student.count({ where });
     const students = await prisma.student.findMany({
       where,
-      skip: (pageNum - 1) * perPageNum,
-      take: perPageNum,
+      skip: (page - 1) * perPage,
+      take: perPage,
       include: {
         user: true,
         Class: true,
         Grade: true,
-        application: { include: { previousSchools: true, familyMembers: true } },
+        application: true, // admissionId mapping
       },
-      orderBy: { user: { surname: "asc" } },
+      orderBy: { user: { [sortBy]: sortOrder } },
     });
 
     const list = students.map((s) => ({
@@ -54,24 +63,43 @@ export async function GET(req: NextRequest) {
       className: s.Class?.name,
       gradeId: s.Grade?.id,
       gradeName: s.Grade?.name,
-      admission: s.application ? {
-        id: s.application.id,
-        progress: s.application.progress,
-        feesAcknowledged: s.application.feesAcknowledged,
-        declarationSigned: s.application.declarationSigned,
-      } : null,
+      admissionId: s.application?.id || null,
     }));
 
     return NextResponse.json({
       students: list,
       pagination: {
-        page: pageNum,
-        perPage: perPageNum,
+        page,
+        perPage,
         total,
-        totalPages: Math.ceil(total / perPageNum),
+        totalPages: Math.ceil(total / perPage),
       },
     });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const schoolAccount = await authorize(req);
+    const body = await req.json();
+    const { userId, classId, gradeId } = body;
+
+    if (!userId) throw new Error("userId is required");
+
+    const student = await prisma.student.create({
+      data: {
+        userId,
+        schoolId: schoolAccount.schoolId,
+        classId,
+        gradeId,
+      },
+      include: { user: true, Class: true, Grade: true, application: true },
+    });
+
+    return NextResponse.json({ student });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Server error" }, { status: 400 });
   }
 }
