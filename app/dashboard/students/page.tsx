@@ -9,7 +9,7 @@ import { useUserStore } from "@/app/store/useUserStore";
 import { useStudentStore, StudentListItem } from "@/app/store/useStudentStore";
 import { useClassesStore } from "@/app/store/useClassesStore";
 
-export default function StudentsPage() {
+export default function TestStudentsPage() {
   const router = useRouter();
   const user = useUserStore((s) => s.user);
 
@@ -27,8 +27,8 @@ export default function StudentsPage() {
     fetchClasses();
   }, [fetchClasses]);
 
-  const loadStudents = useCallback(() => {
-    fetchStudents(page, perPage, localSearch);
+  const loadStudents = useCallback(async () => {
+    await fetchStudents(page, perPage, localSearch);
   }, [page, perPage, localSearch, fetchStudents]);
 
   useEffect(() => {
@@ -53,10 +53,18 @@ export default function StudentsPage() {
     router.push(`/dashboard/students/${student.id}`);
   };
 
-  // ------------------ Map classId/gradeId → names ------------------
-  const getClassName = (classId?: string) => {
-    return classes.find((c) => c.id === classId)?.name ?? "—";
+  // ------------------ Map classId/gradeId → names safely ------------------
+  const getClassName = (classId?: string) =>
+    classes.find((c) => c.id === classId)?.name ?? "—";
+  const getGradeName = (gradeId?: string) => {
+    for (const c of classes) {
+      const grade = c.Grades?.find((g: any) => g.id === gradeId);
+      if (grade) return grade.name;
+    }
+    return "—";
   };
+
+  console.log("students", students); // debug to ensure data is loaded
 
   return (
     <div className="p-6 space-y-6">
@@ -116,8 +124,12 @@ export default function StudentsPage() {
                 >
                   <td className="px-4 py-2">{s.name ?? "—"}</td>
                   <td className="px-4 py-2">{s.email ?? "—"}</td>
-                  <td className="px-4 py-2">{getClassName(s.classId)}</td>
-                  <td className="px-4 py-2">{s.gradeName ?? "—"}</td>
+                  <td className="px-4 py-2">
+                    {s.className ?? getClassName(s.classId)}
+                  </td>
+                  <td className="px-4 py-2">
+                    {s.gradeName ?? getGradeName(s.gradeId)}
+                  </td>
                 </tr>
               ))
             ) : (

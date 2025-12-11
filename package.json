@@ -7,7 +7,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
@@ -44,22 +45,35 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.28.5",
+    "@babel/preset-react": "^7.28.5",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/bcrypt": "^6.0.0",
+    "@types/jest": "^30.0.0",
     "@types/lodash.debounce": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-beautiful-dnd": "^13.1.8",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
+    "babel-jest": "^30.2.0",
     "eslint": "^9",
     "eslint-config-next": "15.5.5",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jest-mock-axios": "^4.9.0",
+    "node-mocks-http": "^1.17.2",
     "postcss": "^8.5.6",
     "prisma": "^6.17.1",
     "tailwindcss": "^4.1.14",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.15"
   },
   "prisma": {
     "seed": "ts-node  prisma/seed.ts"
