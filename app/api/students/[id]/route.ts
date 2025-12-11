@@ -1,100 +1,47 @@
 // app/api/students/[id]/route.ts
-// Purpose: Full CRUD for individual student including relations and school validation
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { SchoolAccount } from "@/lib/schoolAccount";
-import { z } from "zod";
 
-const updateStudentSchema = z.object({
-  classId: z.string().optional(),
-  gradeId: z.string().optional(),
-  enrolledAt: z.string().optional(),
-});
+// ------------------ Helpers ------------------
+async function authorize(req: NextRequest) {
+  const schoolAccount = await SchoolAccount.init(req);
+  if (!schoolAccount) throw new Error("Unauthorized");
+  return schoolAccount;
+}
 
+// ------------------ GET: Single Student ------------------
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const schoolAccount = await authorize(req);
+    const { id } = params;
 
-    const student = await prisma.student.findUnique({
-      where: { id: params.id },
+    const student = await prisma.student.findFirst({
+      where: { id, schoolId: schoolAccount.schoolId },
       include: {
         user: true,
-        school: true,
         Class: true,
         Grade: true,
-        subjects: true,
-        application: { include: { previousSchools: true, familyMembers: true, admissionPayment: true } },
-        Exam: true,
-        StudentAttendance: true,
-        Parent: true,
-        Borrow: { include: { book: true } },
-        Transaction: true,
-        Purchase: { include: { resource: true } },
+        application: { include: { previousSchools: true, familyMembers: true } },
       },
     });
 
     if (!student) return NextResponse.json({ error: "Student not found" }, { status: 404 });
-    if (student.schoolId !== schoolAccount.schoolId) return NextResponse.json({ error: "Access denied" }, { status: 403 });
 
-    const fullData = {
-      ...student,
-      minimalListData: {
-        id: student.id,
-        userId: student.userId,
-        name: [student.user.firstName, student.user.surname, student.user.otherNames].filter(Boolean).join(" "),
-        email: student.user.email,
-        classId: student.Class?.id,
-        gradeId: student.Grade?.id,
-      },
+    const profile = {
+      id: student.id,
+      userId: student.userId,
+      name: [student.user.firstName, student.user.surname, student.user.otherNames].filter(Boolean).join(" "),
+      email: student.user.email,
+      classId: student.Class?.id,
+      className: student.Class?.name,
+      gradeId: student.Grade?.id,
+      gradeName: student.Grade?.name,
+      admission: student.application || null,
     };
 
-    return NextResponse.json({ student: fullData });
+    return NextResponse.json({ student: profile });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
-
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const body = await req.json();
-    const data = updateStudentSchema.parse(body);
-
-    const updatedStudent = await prisma.student.update({
-      where: { id: params.id },
-      data: {
-        classId: data.classId,
-        gradeId: data.gradeId,
-        enrolledAt: data.enrolledAt ? new Date(data.enrolledAt) : undefined,
-      },
-      include: { user: true, Class: true, Grade: true },
-    });
-
-    return NextResponse.json(updatedStudent);
-  } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 });
-    return NextResponse.json({ error: err.message || "Failed to update student" }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    await prisma.student.delete({ where: { id: params.id } });
-
-    return NextResponse.json({ message: "Student deleted successfully" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to delete student" }, { status: 500 });
-  }
-}
-
-// ------------------- Design reasoning -------------------
-// Structure: GET (fetch), PUT (update), DELETE (remove)
-// Implementation guidance: integrates with SchoolAccount, returns full student relations
-// Scalability insight: additional relations (like attendance summaries, grades) can be added without breaking existing contract

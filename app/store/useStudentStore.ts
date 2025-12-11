@@ -24,44 +24,6 @@ export type PreviousSchool = {
   endDate: string;
 };
 
-export type AdmissionData = {
-  id: string;
-  studentId: string;
-  classId?: string;
-  gradeId?: string;
-  profilePicture?: string;
-  surname: string;
-  firstName: string;
-  otherNames?: string;
-  dateOfBirth: string;
-  nationality: string;
-  sex: string;
-  languages: string[];
-  mothersTongue: string;
-  religion: string;
-  denomination?: string;
-  hometown: string;
-  region: string;
-  wardLivesWith: string;
-  postalAddress: string;
-  residentialAddress: string;
-  emergencyContact: string;
-  emergencyMedicalContact?: string;
-  medicalSummary?: string;
-  bloodType?: string;
-  specialDisability?: string;
-  feesAcknowledged: boolean;
-  declarationSigned: boolean;
-  signature?: string;
-  classification?: string;
-  submittedBy?: string;
-  receivedBy?: string;
-  receivedDate?: string;
-  remarks?: string;
-  previousSchools?: PreviousSchool[];
-  familyMembers?: FamilyMember[];
-};
-
 export type StudentProfile = {
   id: string;
   userId: string;
@@ -71,7 +33,7 @@ export type StudentProfile = {
   gradeId?: string;
   className?: string;
   gradeName?: string;
-  admission?: AdmissionData;
+  admission?: any;
   attendance?: any[];
   exams?: any[];
   minimalListData?: {
@@ -126,14 +88,12 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
   listErrors: [],
   pagination: { page: 1, perPage: 20, total: 0, totalPages: 1 },
 
-  // ------------------ Single Student ------------------
   fetchProfile: async (studentId: string) => {
     set({ loadingProfile: true, profileErrors: [] });
     try {
       const res = await axios.get(`/api/students/${studentId}`);
       const student: StudentProfile = res.data.student;
 
-      // Map class and grade names directly
       student.className = student.Class?.name;
       student.gradeName = student.Grade?.name;
 
@@ -158,7 +118,6 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
 
   clearProfile: () => set({ profile: null, profileErrors: [] }),
 
-  // ------------------ Student List ------------------
   fetchStudents: async (page = 1, perPage = 20, search = "") => {
     set({ loadingList: true, listErrors: [] });
     try {

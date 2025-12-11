@@ -1,116 +1,77 @@
 // app/api/students/route.ts
-// Purpose: CRUD + paginated + searchable student list endpoint for a school
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { SchoolAccount } from "@/lib/schoolAccount";
-import { z } from "zod";
 
-// ---------------- Query Validation ----------------
-const querySchema = z.object({
-  page: z.string().optional(),
-  perPage: z.string().optional(),
-  search: z.string().optional(),
-  classId: z.string().optional(),
-  gradeId: z.string().optional(),
-});
+// ------------------ Helpers ------------------
+async function authorize(req: NextRequest) {
+  const schoolAccount = await SchoolAccount.init(req);
+  if (!schoolAccount) throw new Error("Unauthorized");
+  return schoolAccount;
+}
 
-// ---------------- Create Student Payload ----------------
-const studentSchema = z.object({
-  userId: z.string(),
-  classId: z.string().optional(),
-  gradeId: z.string().optional(),
-  enrolledAt: z.string().optional(),
-});
-
+// ------------------ GET: List Students ------------------
 export async function GET(req: NextRequest) {
   try {
-    const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const schoolAccount = await authorize(req);
+    const { search = "", page = "1", perPage = "20", classId, gradeId } = Object.fromEntries(req.nextUrl.searchParams.entries());
 
-    const { searchParams } = new URL(req.url);
-    const query = querySchema.parse(Object.fromEntries(searchParams.entries()));
-
-    const page = Number(query.page || 1);
-    const perPage = Number(query.perPage || 20);
-    const skip = (page - 1) * perPage;
+    const pageNum = parseInt(page as string) || 1;
+    const perPageNum = parseInt(perPage as string) || 20;
 
     const where: any = { schoolId: schoolAccount.schoolId };
-
-    if (query.search) {
+    if (search) {
       where.OR = [
-        { user: { firstName: { contains: query.search, mode: "insensitive" } } },
-        { user: { surname: { contains: query.search, mode: "insensitive" } } },
-        { user: { otherNames: { contains: query.search, mode: "insensitive" } } },
+        { user: { firstName: { contains: search, mode: "insensitive" } } },
+        { user: { surname: { contains: search, mode: "insensitive" } } },
+        { user: { otherNames: { contains: search, mode: "insensitive" } } },
+        { user: { email: { contains: search, mode: "insensitive" } } },
       ];
     }
+    if (classId) where.classId = classId;
+    if (gradeId) where.gradeId = gradeId;
 
-    if (query.classId) where.classId = query.classId;
-    if (query.gradeId) where.gradeId = query.gradeId;
+    const total = await prisma.student.count({ where });
+    const students = await prisma.student.findMany({
+      where,
+      skip: (pageNum - 1) * perPageNum,
+      take: perPageNum,
+      include: {
+        user: true,
+        Class: true,
+        Grade: true,
+        application: { include: { previousSchools: true, familyMembers: true } },
+      },
+      orderBy: { user: { surname: "asc" } },
+    });
 
-    const [students, total] = await prisma.$transaction([
-      prisma.student.findMany({
-        where,
-        include: {
-          user: true,
-          school: true,
-          Class: true,
-          Grade: true,
-          subjects: true,
-          application: {
-            include: { previousSchools: true, familyMembers: true, admissionPayment: true },
-          },
-          Exam: true,
-          StudentAttendance: true,
-          Parent: true,
-          Borrow: { include: { book: true } },
-          Transaction: true,
-          Purchase: { include: { resource: true } },
-        },
-        skip,
-        take: perPage,
-        orderBy: { enrolledAt: "desc" },
-      }),
-      prisma.student.count({ where }),
-    ]);
+    const list = students.map((s) => ({
+      id: s.id,
+      userId: s.userId,
+      name: [s.user.firstName, s.user.surname, s.user.otherNames].filter(Boolean).join(" "),
+      email: s.user.email,
+      classId: s.Class?.id,
+      className: s.Class?.name,
+      gradeId: s.Grade?.id,
+      gradeName: s.Grade?.name,
+      admission: s.application ? {
+        id: s.application.id,
+        progress: s.application.progress,
+        feesAcknowledged: s.application.feesAcknowledged,
+        declarationSigned: s.application.declarationSigned,
+      } : null,
+    }));
 
     return NextResponse.json({
-      students,
-      pagination: { total, page, perPage, totalPages: Math.ceil(total / perPage) },
-    });
-  } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 });
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
-  }
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const body = await req.json();
-    const data = studentSchema.parse(body);
-
-    const newStudent = await prisma.student.create({
-      data: {
-        userId: data.userId,
-        schoolId: schoolAccount.schoolId,
-        classId: data.classId,
-        gradeId: data.gradeId,
-        enrolledAt: data.enrolledAt ? new Date(data.enrolledAt) : undefined,
+      students: list,
+      pagination: {
+        page: pageNum,
+        perPage: perPageNum,
+        total,
+        totalPages: Math.ceil(total / perPageNum),
       },
-      include: { user: true, Class: true, Grade: true },
     });
-
-    return NextResponse.json(newStudent, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 });
-    return NextResponse.json({ error: err.message || "Failed to create student" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
-
-// ------------------- Design reasoning -------------------
-// Structure: GET (list, paginated), POST (create)
-// Implementation guidance: drop-in API route, integrates with SchoolAccount auth
-// Scalability insight: can extend filters to subjects, exam scores, attendance status
