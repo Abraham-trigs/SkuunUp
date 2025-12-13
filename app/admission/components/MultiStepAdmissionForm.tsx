@@ -15,6 +15,7 @@ import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 
+// Titles for each step of the multi-step form
 const STEP_TITLES = [
   "User Info",
   "Personal Info",
@@ -32,7 +33,7 @@ interface LabeledInputProps
   error?: string;
 }
 
-// Reusable labeled input component
+// Reusable input component with label and inline error display
 const LabeledInput: React.FC<LabeledInputProps> = ({
   label,
   error,
@@ -52,12 +53,12 @@ const LabeledInput: React.FC<LabeledInputProps> = ({
 
 export default function MultiStepAdmissionForm() {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(0); // Tracks which step is active
   const { formData, setField, completeStep, loading } = useAdmissionStore();
   const { classes, fetchClasses } = useClassesStore();
-  const MAX_CLASS_SIZE = 30;
+  const MAX_CLASS_SIZE = 30; // Maximum students per class
 
-  // Initialize React Hook Form
+  // Initialize React Hook Form with Zod validation and form store data
   const methods = useForm<z.infer<typeof admissionFormSchema>>({
     defaultValues: formData,
     resolver: zodResolver(admissionFormSchema),
@@ -74,30 +75,40 @@ export default function MultiStepAdmissionForm() {
     reset,
   } = methods;
 
+  // Reset form with current store data on mount, and fetch classes
   useEffect(() => {
     reset(formData);
-    fetchClasses(); // Load classes on mount
+    fetchClasses();
   }, [formData, fetchClasses, reset]);
 
+  // Handle dynamic repeated fields
   const familyArray = useFieldArray({ control, name: "familyMembers" });
   const previousArray = useFieldArray({ control, name: "previousSchools" });
 
+  // Watch selected class to dynamically render grade options
   const selectedClassId = watch("classId");
   const selectedClass = classes.find((cls) => cls.id === selectedClassId);
 
+  // On clicking "Next" or "Submit"
   const onNext = async (data: any) => {
+    // Merge form data into global store
     Object.keys(data).forEach((key) => setField(key, data[key]));
     const success = await completeStep(currentStep);
-    if (!success) return;
+    if (!success) return; // Stop if step cannot be completed
+
+    // Move to next step or redirect on final submission
     if (currentStep < STEP_TITLES.length - 1) setCurrentStep(currentStep + 1);
     else router.push("/dashboard");
   };
 
+  // Navigate back one step
   const onBack = () => setCurrentStep((prev) => Math.max(prev - 1, 0));
 
+  // Render input fields based on current step
   const renderStepFields = () => {
     switch (currentStep) {
       case 0:
+        // User Info
         return (
           <>
             <LabeledInput
@@ -130,6 +141,7 @@ export default function MultiStepAdmissionForm() {
           </>
         );
       case 1:
+        // Personal Info + Class & Grade selection
         return (
           <>
             <LabeledInput
@@ -144,7 +156,7 @@ export default function MultiStepAdmissionForm() {
               error={errors.nationality?.message as string}
             />
 
-            {/* Sex */}
+            {/* Sex Selection */}
             <div className="flex flex-col w-full mb-4">
               <label className="mb-1 text-gray-700 font-medium">Sex</label>
               <select
@@ -171,7 +183,7 @@ export default function MultiStepAdmissionForm() {
                 {...register("classId")}
                 onChange={(e) => {
                   setValue("classId", e.target.value);
-                  setValue("grade", ""); // Reset grade when class changes
+                  setValue("gradeId", ""); // reset gradeId when class changes
                 }}
                 className="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -201,7 +213,7 @@ export default function MultiStepAdmissionForm() {
                   Select Grade
                 </label>
                 <select
-                  {...register("grade")}
+                  {...register("gradeId")} // aligned with store/API
                   className="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select Grade</option>
@@ -216,9 +228,9 @@ export default function MultiStepAdmissionForm() {
                     </option>
                   ))}
                 </select>
-                {errors.grade && (
+                {errors.gradeId && (
                   <span className="text-red-600 text-xs mt-1">
-                    {errors.grade.message}
+                    {errors.gradeId.message}
                   </span>
                 )}
               </div>
@@ -226,6 +238,7 @@ export default function MultiStepAdmissionForm() {
           </>
         );
       case 2:
+        // Languages & Religion
         return (
           <>
             <LabeledInput
@@ -261,6 +274,7 @@ export default function MultiStepAdmissionForm() {
           </>
         );
       case 3:
+        // Ward Details
         return (
           <>
             <LabeledInput
@@ -294,6 +308,7 @@ export default function MultiStepAdmissionForm() {
           </>
         );
       case 4:
+        // Contact & Emergency
         return (
           <>
             <LabeledInput
@@ -324,6 +339,7 @@ export default function MultiStepAdmissionForm() {
           </>
         );
       case 5:
+        // Medical Info
         return (
           <>
             <LabeledInput
@@ -344,6 +360,7 @@ export default function MultiStepAdmissionForm() {
           </>
         );
       case 6:
+        // Previous Schools & Family Members
         return (
           <>
             <h4 className="font-semibold mt-4 mb-2">Previous Schools</h4>
@@ -442,6 +459,7 @@ export default function MultiStepAdmissionForm() {
           </>
         );
       case 7:
+        // Fees & Declaration
         return (
           <>
             <label className="flex items-center gap-2">
@@ -518,6 +536,7 @@ export default function MultiStepAdmissionForm() {
           ></div>
         </div>
 
+        {/* Animated Step Fields */}
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
@@ -530,6 +549,7 @@ export default function MultiStepAdmissionForm() {
           </motion.div>
         </AnimatePresence>
 
+        {/* Navigation Buttons */}
         <div className="flex justify-between mt-4">
           {currentStep > 0 && (
             <button
@@ -550,6 +570,7 @@ export default function MultiStepAdmissionForm() {
           </button>
         </div>
 
+        {/* Display collective form errors */}
         {Object.keys(errors).length > 0 && (
           <div className="text-red-600 mt-2">
             {Object.entries(errors).map(([key, val]) => (
@@ -566,22 +587,22 @@ export default function MultiStepAdmissionForm() {
 
 /**
 Design reasoning:
-- Preloads classes and fetches grades dynamically on class selection to avoid unnecessary API calls.
-- Step-based form with React Hook Form + Zod ensures full validation and normalized payload.
-- Labeled inputs and select elements provide accessible, clear UI.
+- Step-based form keeps user focus and simplifies validation.
+- Dynamic grade dropdown avoids unnecessary data fetch.
+- Inline and collective error displays improve UX.
 
 Structure:
-- 8-step form with step indicators and progress bar.
-- React Hook Form manages state; useFieldArray handles repeated fields (family, previous schools).
-- Selected class triggers grade dropdown dynamically.
+- 8-step form with step indicators and animated progress.
+- Repeated fields managed via useFieldArray.
+- React Hook Form + Zod for schema validation.
 
 Implementation guidance:
-- Ensure useClassesStore fetchClasses and class grades structure is kept updated.
-- Form submission merges local state with global store and completes steps sequentially.
-- Error messages displayed inline per field and collectively at the bottom.
+- Keep store in sync with form using setField.
+- Reset grade on class change to avoid invalid data.
+- Animate transitions with AnimatePresence for smooth UX.
 
 Scalability insight:
-- Supports hundreds of classes and grades without overfetching.
-- Step-based and field arrays allow extension with new fields or repeated data.
-- Animations and dynamic fetch keep UX smooth even with large datasets.
+- Easily extendable with additional steps or repeated fields.
+- Supports large datasets of classes and grades.
+- Maintains performance with minimal re-renders due to controlled inputs.
 */
