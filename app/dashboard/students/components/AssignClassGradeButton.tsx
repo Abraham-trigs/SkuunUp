@@ -1,7 +1,6 @@
-// app/(dashboard)/students/components/AssignClassGradeButton.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useStudentStore } from "@/app/store/useStudentStore.ts";
 import { useAdmissionStore, GradeOption } from "@/app/store/admissionStore.ts";
 
@@ -25,12 +24,61 @@ export default function AssignClassGradeButton({
   const [selectedGrade, setSelectedGrade] = useState(currentGradeId || "");
 
   const { updateStudent } = useStudentStore();
-  const { selectGrade } = useAdmissionStore(); // optional auto-grade helper
+  const { selectGrade } = useAdmissionStore();
+
+  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setSelectedClass(currentClassId || "");
     setSelectedGrade(currentGradeId || "");
   }, [currentClassId, currentGradeId]);
+
+  // Focus first input when modal opens
+  useEffect(() => {
+    if (open && modalRef.current) {
+      const firstInput =
+        modalRef.current.querySelector<HTMLSelectElement>("select");
+      firstInput?.focus();
+    }
+  }, [open]);
+
+  // Handle Escape key and Tab focus trap
+  useEffect(() => {
+    if (!open || !modalRef.current) return;
+
+    const focusableSelectors =
+      'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]';
+    const focusableElements = Array.from(
+      modalRef.current.querySelectorAll<HTMLElement>(focusableSelectors)
+    );
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      } else if (e.key === "Tab") {
+        if (focusableElements.length === 0) return;
+
+        const first = focusableElements[0];
+        const last = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
 
   const handleAssign = async () => {
     if (!studentId) return;
@@ -58,8 +106,15 @@ export default function AssignClassGradeButton({
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            ref={modalRef}
+            className="bg-white p-6 rounded shadow-md w-full max-w-md max-h-[90vh] overflow-y-auto"
+          >
             <h2 className="text-lg font-semibold mb-4">Assign Class & Grade</h2>
 
             <div className="mb-4">
@@ -101,7 +156,7 @@ export default function AssignClassGradeButton({
               </select>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 mt-4">
               <button
                 className="px-3 py-1 border rounded hover:bg-gray-100"
                 onClick={() => setOpen(false)}

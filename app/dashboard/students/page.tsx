@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import AddStudentModal from "./components/AddStudentModal";
+import AssignClassGradeButton from "./components/AssignClassGradeButton";
 import {
   useStudentStore,
   StudentListItem,
@@ -59,9 +60,7 @@ export default function StudentsPage() {
   // ------------------ Row Click ------------------
   const handleRowClick = async (student: StudentListItem) => {
     await fetchStudentDetail(student.id);
-    if (student.admissionId) {
-      await fetchStudentAdmission(student.admissionId);
-    }
+    if (student.admissionId) await fetchStudentAdmission(student.admissionId);
     router.push(`/students/${student.id}`);
   };
 
@@ -69,7 +68,6 @@ export default function StudentsPage() {
   const handleSort = (key: keyof StudentListItem) => {
     const sortOrder =
       filters.sortBy === key && filters.sortOrder === "asc" ? "desc" : "asc";
-
     setFilters({ sortBy: key, sortOrder, page: 1 });
   };
 
@@ -111,21 +109,22 @@ export default function StudentsPage() {
         />
       </div>
 
-      {/* Table */}
+      {/* Reflective Header for Class & Grade */}
+      <div className="flex justify-between items-center mt-4 mb-2 px-2">
+        <span className="font-medium">Class & Grade Assignment</span>
+      </div>
+
+      {/* Students Table */}
       <table className="min-w-full border-collapse border border-gray-200">
         <thead>
           <tr>
-            {["name", "email", "className", "gradeName"].map((key) => (
+            {["name", "email"].map((key) => (
               <th
                 key={key}
                 className="border px-4 py-2 cursor-pointer"
                 onClick={() => handleSort(key as keyof StudentListItem)}
               >
-                {key === "className"
-                  ? "Class"
-                  : key === "gradeName"
-                  ? "Grade"
-                  : key.charAt(0).toUpperCase() + key.slice(1)}
+                {key.charAt(0).toUpperCase() + key.slice(1)}
                 {filters.sortBy === key
                   ? filters.sortOrder === "asc"
                     ? " ▲"
@@ -133,28 +132,46 @@ export default function StudentsPage() {
                   : ""}
               </th>
             ))}
+            <th className="border px-4 py-2">Assign Class & Grade</th>
           </tr>
         </thead>
 
         <tbody>
           {students.length === 0 && (
             <tr>
-              <td colSpan={4} className="border px-4 py-2 text-center">
+              <td colSpan={3} className="border px-4 py-2 text-center">
                 No students found.
               </td>
             </tr>
           )}
 
           {students.map((s) => (
-            <tr
-              key={s.id}
-              className="cursor-pointer hover:bg-gray-50"
-              onClick={() => handleRowClick(s)}
-            >
-              <td className="border px-4 py-2">{s.name ?? "Unknown"}</td>
-              <td className="border px-4 py-2">{s.email ?? "-"}</td>
-              <td className="border px-4 py-2">{s.className ?? "-"}</td>
-              <td className="border px-4 py-2">{s.gradeName ?? "-"}</td>
+            <tr key={s.id} className="cursor-pointer hover:bg-gray-50">
+              <td
+                className="border px-4 py-2"
+                onClick={() => handleRowClick(s)}
+              >
+                {s.name ?? "Unknown"}
+              </td>
+              <td
+                className="border px-4 py-2"
+                onClick={() => handleRowClick(s)}
+              >
+                {s.email ?? "-"}
+              </td>
+              <td className="border px-4 py-2">
+                {!s.classId ? (
+                  <AssignClassGradeButton
+                    studentId={s.id}
+                    currentClassId={s.classId}
+                    currentGradeId={s.gradeId}
+                    grades={[]} // pass your grades list from parent/store
+                    classes={[]} // pass your classes list from parent/store
+                  />
+                ) : (
+                  <span className="text-gray-500">Assigned</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
