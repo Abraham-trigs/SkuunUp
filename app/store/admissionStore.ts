@@ -4,7 +4,8 @@
 import { create } from "zustand";
 import { z } from "zod";
 import axios from "axios";
-import { useAuthStore } from "./useAuthStore.ts";
+import { useAuthStore } from "./useAuthStore";
+import { useClassesStore } from "./useClassesStore";
 
 // ------------------ Types ------------------
 export type FamilyMember = {
@@ -36,14 +37,14 @@ export type GradeOption = {
 
 // ------------------ Step Fields ------------------
 const STEP_FIELDS: string[][] = [
-  ["surname", "firstName", "otherNames", "email", "password"], // Step 0
-  ["dateOfBirth", "nationality", "sex"], // Step 1
-  ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"], // Step 2
-  ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"], // Step 3
-  ["postalAddress", "residentialAddress", "wardMobile", "emergencyContact", "emergencyMedicalContact"], // Step 4
-  ["medicalSummary", "bloodType", "specialDisability"], // Step 5
-  ["previousSchools", "familyMembers"], // Step 6
-  ["feesAcknowledged", "declarationSigned", "signature", "classId", "gradeId"], // Step 7
+  ["surname", "firstName", "otherNames", "email", "password"], 
+  ["dateOfBirth", "nationality", "sex"], 
+  ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"], 
+  ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"], 
+  ["postalAddress", "residentialAddress", "wardMobile", "emergencyContact", "emergencyMedicalContact"], 
+  ["medicalSummary", "bloodType", "specialDisability"], 
+  ["previousSchools", "familyMembers"], 
+  ["feesAcknowledged", "declarationSigned", "signature", "classId", "gradeId"],
 ];
 
 // ------------------ Admission Store Schema ------------------
@@ -51,43 +52,35 @@ export const admissionFormSchema = z.object({
   applicationId: z.string().optional(),
   studentId: z.string().optional(),
   progress: z.number().default(0),
-  // Step 0
   surname: z.string().optional(),
   firstName: z.string().optional(),
   otherNames: z.string().optional(),
   email: z.string().optional(),
   password: z.string().optional(),
-  // Step 1
   dateOfBirth: z.string().optional(),
   nationality: z.string().optional(),
   sex: z.string().optional(),
-  // Step 2
   languages: z.array(z.string()).optional(),
   mothersTongue: z.string().optional(),
   religion: z.string().optional(),
   denomination: z.string().optional(),
   hometown: z.string().optional(),
   region: z.string().optional(),
-  // Step 3
   profilePicture: z.string().optional(),
   wardLivesWith: z.string().optional(),
   numberOfSiblings: z.number().optional(),
   siblingsOlder: z.number().optional(),
   siblingsYounger: z.number().optional(),
-  // Step 4
   postalAddress: z.string().optional(),
   residentialAddress: z.string().optional(),
   wardMobile: z.string().optional(),
   emergencyContact: z.string().optional(),
   emergencyMedicalContact: z.string().optional(),
-  // Step 5
   medicalSummary: z.string().optional(),
   bloodType: z.string().optional(),
   specialDisability: z.string().optional(),
-  // Step 6
   previousSchools: z.array(z.any()).optional(),
   familyMembers: z.array(z.any()).optional(),
-  // Step 7
   feesAcknowledged: z.boolean().optional(),
   declarationSigned: z.boolean().optional(),
   signature: z.string().optional(),
@@ -113,9 +106,9 @@ interface AdmissionStore {
   addPreviousSchool: (school: PreviousSchool) => void;
   removePreviousSchool: (idx: number) => void;
 
-  // Class / grade helpers
-  setClass: (classId: string, grades: GradeOption[]) => void;
+  setClass: (classId: string, grades?: GradeOption[]) => void;
   selectGrade: (gradeId?: string, grades?: GradeOption[]) => void;
+  assignStudentClassGrade: (studentId: string, classId: string, gradeId: string) => Promise<any>;
 }
 
 // ------------------ Helpers ------------------
@@ -154,7 +147,6 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     try {
       const payload: any = {};
       STEP_FIELDS[step].forEach((f) => (payload[f] = get().formData[f]));
-
       const schoolId = useAuthStore.getState().user?.school?.id;
       if (!schoolId) throw new Error("Unauthorized: School ID missing");
 
@@ -175,7 +167,6 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       set((state) => ({
         formData: { ...state.formData, progress: calculateProgress(state.formData) },
       }));
-
       return true;
     } catch (err: any) {
       set({ errors: { completeStep: [err?.response?.data?.error || err.message || "Step failed"] } });
@@ -185,58 +176,48 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     }
   },
 
-  // admissionStore.ts
-assignStudentClassGrade: async (studentId: string, classId: string, gradeId: string) => {
-  set({ loading: true, errors: {} });
-  try {
-    // Update the student
-    const schoolId = useAuthStore.getState().user?.school?.id;
-    if (!schoolId) throw new Error("Unauthorized: missing school ID");
+  assignStudentClassGrade: async (studentId: string, classId: string, gradeId: string) => {
+    set({ loading: true, errors: {} });
+    try {
+      const schoolId = useAuthStore.getState().user?.school?.id;
+      if (!schoolId) throw new Error("Unauthorized: missing school ID");
 
-    const res = await axios.put(
-      `/api/students/${studentId}`,
-      { classId, gradeId },
-      { headers: { "X-School-ID": schoolId } }
-    );
-
-    const updatedStudent = res.data.student;
-
-    // Automatically update admission status
-    let admissionStatus = updatedStudent.classId && updatedStudent.gradeId ? "Enrolled" : "Pending";
-
-    // Update the admission record if exists
-    if (updatedStudent.admissionId) {
-      await axios.patch(
-        `/api/admissions/${updatedStudent.admissionId}`,
-        { classId, gradeId, admissionStatus },
+      const res = await axios.put(
+        `/api/students/${studentId}`,
+        { classId, gradeId },
         { headers: { "X-School-ID": schoolId } }
       );
+
+      const updatedStudent = res.data.student;
+
+      let admissionStatus = updatedStudent.classId && updatedStudent.gradeId ? "Enrolled" : "Pending";
+
+      if (updatedStudent.admissionId) {
+        await axios.patch(
+          `/api/admissions/${updatedStudent.admissionId}`,
+          { classId, gradeId, admissionStatus },
+          { headers: { "X-School-ID": schoolId } }
+        );
+      }
+
+      set((state) => ({
+        formData: { ...state.formData, classId, gradeId },
+      }));
+
+      useClassesStore.setState((cs) => {
+        return {
+          students: cs.students.map((s) => (s.id === studentId ? updatedStudent : s)),
+        };
+      });
+
+      return updatedStudent;
+    } catch (err: any) {
+      set({ errors: { assignStudentClassGrade: [err?.response?.data?.error || err.message || "Update failed"] } });
+      throw err;
+    } finally {
+      set({ loading: false });
     }
-
-    // Update local state
-    set((state) => ({
-      formData: {
-        ...state.formData,
-        classId,
-        gradeId,
-      },
-    }));
-
-    // Optimistic UI update in student store
-    useStudentStore.setState((state) => ({
-      students: state.students.map((s) => (s.id === studentId ? updatedStudent : s)),
-      studentDetail: state.studentDetail?.id === studentId ? updatedStudent : state.studentDetail,
-    }));
-
-    return updatedStudent;
-  } catch (err: any) {
-    set({ errors: { assignStudentClassGrade: [err?.response?.data?.error || err.message || "Update failed"] } });
-    throw err;
-  } finally {
-    set({ loading: false });
-  }
-},
-
+  },
 
   fetchAdmission: async (applicationId) => {
     set({ loading: true, errors: {} });
@@ -308,8 +289,13 @@ assignStudentClassGrade: async (studentId: string, classId: string, gradeId: str
     }),
 
   // ------------------ Class / Grade Logic ------------------
-  setClass: (classId: string, grades: GradeOption[]) => {
-    const availableGrade = grades.find((g) => g.enrolled < g.capacity);
+  setClass: (classId: string, grades?: GradeOption[]) => {
+    const cs = useClassesStore.getState();
+    const dynamicGrades = grades?.map((g) => {
+      const enrolled = cs.students.filter((s) => s.classId === classId && s.gradeId === g.id).length;
+      return { ...g, enrolled };
+    });
+    const availableGrade = dynamicGrades?.find((g) => g.enrolled < g.capacity);
     set((state) => ({
       formData: {
         ...state.formData,
@@ -321,28 +307,28 @@ assignStudentClassGrade: async (studentId: string, classId: string, gradeId: str
   },
 
   selectGrade: (gradeId?: string, grades?: GradeOption[]) => {
-    if (gradeId) {
-      set((state) => ({
-        formData: {
-          ...state.formData,
-          gradeId,
-          progress: calculateProgress({ ...state.formData, gradeId }),
-        },
-      }));
-    } else if (grades) {
-      const availableGrade = grades.find((g) => g.enrolled < g.capacity);
-      set((state) => ({
-        formData: {
-          ...state.formData,
-          gradeId: availableGrade?.id,
-          progress: calculateProgress({ ...state.formData, gradeId: availableGrade?.id }),
-        },
-      }));
+    const cs = useClassesStore.getState();
+    let chosenId = gradeId;
+    if (!gradeId && grades) {
+      const dynamicGrades = grades.map((g) => {
+        const enrolled = cs.students.filter((s) => s.classId === get().formData.classId && s.gradeId === g.id).length;
+        return { ...g, enrolled };
+      });
+      const availableGrade = dynamicGrades.find((g) => g.enrolled < g.capacity);
+      chosenId = availableGrade?.id;
     }
+    set((state) => ({
+      formData: {
+        ...state.formData,
+        gradeId: chosenId,
+        progress: calculateProgress({ ...state.formData, gradeId: chosenId }),
+      },
+    }));
   },
 }));
 
-// ------------------ Notes ------------------
-// Tracks all steps, fields, and dynamic arrays (family/previous schools).
-// Auto-selects grades with capacity and calculates progress automatically.
-// Integrates seamlessly with multi-step admission form.
+// ------------------ Design reasoning → Structure → Implementation guidance → Scalability insight ------------------
+// Design reasoning: Ensure grade selection always respects real-time student enrollment.
+// Structure: Auto-compute enrolled count from useClassesStore.students before setting class/grade.
+// Implementation guidance: Use dynamicGrades in setClass/selectGrade to prevent over-enrollment; aligns with student store state.
+// Scalability insight: This pattern scales with larger schools since computation is filtered in memory; can be optimized via server-side aggregation for massive datasets.
