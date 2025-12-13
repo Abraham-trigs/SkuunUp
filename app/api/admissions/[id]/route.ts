@@ -1,10 +1,16 @@
 // app/api/admission/[id]/route.ts
+// Purpose: Handle PATCH updates to a single admission application step-by-step
+// Store-compatible, test-safe, auth-after-validation
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { z, ZodObject } from "zod";
+import { z } from "zod";
 import { SchoolAccount } from "@/lib/schoolAccount";
 
-// ------------------ Step Schemas ------------------
+/* -------------------------------------------------------------------------- */
+/*                               STEP SCHEMAS                                  */
+/* -------------------------------------------------------------------------- */
+
 const FamilyMemberSchema = z.object({
   relation: z.string(),
   name: z.string(),
@@ -25,15 +31,14 @@ const PreviousSchoolSchema = z.object({
   endDate: z.coerce.date(),
 });
 
-const StepSchemas: ZodObject<any>[] = [
+/* EXACTLY matches store payloads (flat, no nesting) */
+const StepSchemas = [
   z.object({
-    user: z.object({
-      surname: z.string(),
-      firstName: z.string(),
-      otherNames: z.string().optional(),
-      email: z.string().email(),
-      password: z.string(),
-    }),
+    surname: z.string().min(1),
+    firstName: z.string().min(1),
+    otherNames: z.string().optional(),
+    email: z.string().email(),
+    password: z.string().min(1),
   }),
   z.object({
     dateOfBirth: z.coerce.date().optional(),
@@ -75,112 +80,150 @@ const StepSchemas: ZodObject<any>[] = [
     feesAcknowledged: z.boolean().optional(),
     declarationSigned: z.boolean().optional(),
     signature: z.string().optional(),
+    classId: z.string().optional(),
+    gradeId: z.string().optional(),
   }),
 ];
 
-// ------------------ Helpers ------------------
-async function authorize(req: NextRequest) {
-  const schoolAccount = await SchoolAccount.init(req);
-  if (!schoolAccount) throw new Error("Unauthorized");
-  return schoolAccount;
+/* -------------------------------------------------------------------------- */
+/*                                   HELPERS                                   */
+/* -------------------------------------------------------------------------- */
+
+// authorize helper function modified to call SchoolAccount.init() correctly (no args needed)
+async function authorize() {
+  const account = await SchoolAccount.init();
+  if (!account) throw new Error("Unauthorized");
+  return account;
 }
 
-function calculateDynamicProgress(data: any, schemas: ZodObject<any>[]) {
-  let completedSteps = 0;
-  schemas.forEach((schema) => {
-    const fields = Object.keys(schema.shape);
-    const stepComplete = fields.every((field) => {
-      const value = data[field];
-      if (Array.isArray(value)) return value.length > 0;
-      if (typeof value === "boolean") return value === true;
-      return value !== undefined && value !== null && value !== "";
+function calculateProgress(app: any) {
+  const steps = [
+    ["surname", "firstName", "email", "password"],
+    ["dateOfBirth", "nationality", "sex"],
+    ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"],
+    ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"],
+    ["postalAddress", "residentialAddress", "wardMobile", "emergencyContact", "emergencyMedicalContact"],
+    ["medicalSummary", "bloodType", "specialDisability"],
+    ["previousSchools", "familyMembers"],
+    ["feesAcknowledged", "declarationSigned", "signature", "classId", "gradeId"],
+  ];
+
+  let done = 0;
+  for (const fields of steps) {
+    const ok = fields.every((f) => {
+      const v = app[f];
+      if (Array.isArray(v)) return v.length > 0;
+      if (typeof v === "boolean") return v === true;
+      return v !== undefined && v !== null && v !== "";
     });
-    if (stepComplete) completedSteps += 1;
-  });
-  return Math.round((completedSteps / schemas.length) * 100);
+    if (ok) done++;
+  }
+
+  return Math.round((done / steps.length) * 100);
 }
 
-// Nested arrays replacement
-async function replaceNestedArraysTx(tx: any, applicationId: string, payload: { previousSchools?: any[]; familyMembers?: any[] }) {
-  const promises: Promise<any>[] = [];
+async function syncNestedArrays(
+  tx: any,
+  applicationId: string,
+  payload: { previousSchools?: any[]; familyMembers?: any[] }
+) {
   if (payload.previousSchools) {
-    promises.push(tx.previousSchool.deleteMany({ where: { applicationId } }));
-    if (payload.previousSchools.length > 0) {
-      promises.push(tx.previousSchool.createMany({ data: payload.previousSchools.map((ps) => ({ ...ps, applicationId })) }));
+    await tx.previousSchool.deleteMany({ where: { applicationId } });
+    if (payload.previousSchools.length) {
+      await tx.previousSchool.createMany({
+        data: payload.previousSchools.map((s) => ({ ...s, applicationId })),
+      });
     }
   }
   if (payload.familyMembers) {
-    promises.push(tx.familyMember.deleteMany({ where: { applicationId } }));
-    if (payload.familyMembers.length > 0) {
-      promises.push(tx.familyMember.createMany({ data: payload.familyMembers.map((fm) => ({ ...fm, applicationId })) }));
+    await tx.familyMember.deleteMany({ where: { applicationId } });
+    if (payload.familyMembers.length) {
+      await tx.familyMember.createMany({
+        data: payload.familyMembers.map((f) => ({ ...f, applicationId })),
+      });
     }
   }
-  await Promise.all(promises);
 }
 
-// ------------------ PATCH Update Admission ------------------
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+/* -------------------------------------------------------------------------- */
+/*                                    PATCH                                    */
+/* -------------------------------------------------------------------------- */
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const schoolAccount = await authorize(req);
-    const applicationId = params.id;
+    // FIX 1: Await the params before accessing properties
+    const { id: applicationId } = await params;
+
+    if (!applicationId) {
+      return NextResponse.json({ error: "Missing application id" }, { status: 400 });
+    }
+
+    // Parse body and step
     const body = await req.json();
-
-    // Step index sent from frontend
-    const stepIndex = body.step;
-    if (stepIndex === undefined || stepIndex < 0 || stepIndex >= StepSchemas.length)
+    const step = body.step;
+    if (typeof step !== "number" || !StepSchemas[step]) {
       return NextResponse.json({ error: "Invalid step index" }, { status: 400 });
+    }
 
-    // Validate only current step
-    const schema = StepSchemas[stepIndex];
-    const parsed = schema.parse(body);
+    // Validate payload for this step
+    const parsed = StepSchemas[step].safeParse(body);
+    if (!parsed.success) {
+      // FIX 2: Safeguard against 'undefined' errors property using null-coalescing
+      const errorDetails = parsed.error.errors ?? []; 
 
-    const updatedApp = await prisma.$transaction(async (tx) => {
-      // Update main fields
-      const appData: any = { ...parsed };
-      // Remove nested arrays temporarily
-      delete appData.previousSchools;
-      delete appData.familyMembers;
+      return NextResponse.json(
+        {
+          error: errorDetails.map((e) => ({
+            path: e.path.join("."),
+            message: e.message,
+          })),
+        },
+        { status: 400 }
+      );
+    }
 
+    // Authorize school account
+    const schoolAccount = await authorize(); 
+    if (!schoolAccount) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { previousSchools, familyMembers, ...flat } = parsed.data;
+
+    // Transaction: update flat fields + nested arrays + progress
+    const updated = await prisma.$transaction(async (tx) => {
+      // Update flat fields
       const app = await tx.application.update({
         where: { id: applicationId },
-        data: { ...appData },
+        data: flat,
       });
 
-      // Handle nested arrays if present
-      await replaceNestedArraysTx(tx, applicationId, {
-        previousSchools: parsed.previousSchools,
-        familyMembers: parsed.familyMembers,
+      // Sync nested arrays (Step 6)
+      await syncNestedArrays(tx, applicationId, { previousSchools, familyMembers });
+
+      // Recalculate progress
+      const full = await tx.application.findUnique({
+        where: { id: applicationId },
+        include: { previousSchools: true, familyMembers: true },
       });
 
-      // Re-fetch updated application for progress calculation
-      const fullApp = await tx.application.findUnique({ where: { id: applicationId }, include: { previousSchools: true, familyMembers: true } });
-
-      if (fullApp) {
-        const progress = calculateDynamicProgress(fullApp, StepSchemas);
-        await tx.application.update({ where: { id: applicationId }, data: { progress } });
+      if (full) {
+        await tx.application.update({
+          where: { id: applicationId },
+          data: { progress: calculateProgress(full) },
+        });
       }
 
       return app;
     });
 
-    return NextResponse.json({ success: true, application: updatedApp }, { status: 200 });
+    return NextResponse.json({ success: true, application: updated });
   } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors.map((e) => ({ path: e.path, message: e.message })) }, { status: 400 });
-    }
-    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
+      // Log the specific server error to the console for debugging
+      console.error("API Error in PATCH /api/admissions/[id]:", err);
+      return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
-
-
-// Key points:
-
-// Only updates fields relevant to the current step.
-
-// Handles nested arrays (previousSchools & familyMembers) safely.
-
-// Recalculates progress after every step.
-
-// Requires step from frontend to know which step is being submitted.
-
-// Uses [id] param to update an existing admission, not create a new one.

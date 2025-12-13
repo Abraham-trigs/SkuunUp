@@ -274,3 +274,4 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     get().fetchClasses(1);
   },
 }));
+

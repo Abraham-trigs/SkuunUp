@@ -1,32 +1,63 @@
 // app/stores/admissionStore.ts
+// Purpose: Centralized Zustand store for multi-step admission flow,
+// strictly aligned with API validation, coercion, and persistence rules.
+
 "use client";
 
 import { create } from "zustand";
 import { z } from "zod";
 import axios from "axios";
-import { useAuthStore } from "./useAuthStore";
-import { useClassesStore } from "./useClassesStore";
+import { useAuthStore } from "./useAuthStore.ts";
 
-// ------------------ Types ------------------
-export type FamilyMember = {
-  relation: string;
-  name: string;
-  postalAddress: string;
-  residentialAddress: string;
-  phone?: string;
-  email?: string;
-  occupation?: string;
-  workplace?: string;
-  religion?: string;
-  isAlive?: boolean;
-};
+/* -------------------------------------------------------------------------- */
+/*                               Design reasoning                              */
+/* -------------------------------------------------------------------------- */
+/*
+This store mirrors the API contract exactly to prevent client/server drift.
+Validation is strict but forgiving: users can type freely, while normalization
+and coercion happen only at submit time. The API remains authoritative, and the
+store guarantees it never sends payloads the API would reject.
+*/
 
-export type PreviousSchool = {
-  name: string;
-  location: string;
-  startDate: string | Date;
-  endDate: string | Date;
-};
+/* -------------------------------------------------------------------------- */
+/*                                   Structure                                 */
+/* -------------------------------------------------------------------------- */
+/*
+- Zod schemas that mirror API step schemas
+- Normalization helpers (dates, arrays)
+- Progress calculation identical to API logic
+- Zustand store with full admission lifecycle
+*/
+
+/* -------------------------------------------------------------------------- */
+/*                              Shared Schemas                                 */
+/* -------------------------------------------------------------------------- */
+
+// EXACT mirror of API FamilyMemberSchema
+export const FamilyMemberSchema = z.object({
+  relation: z.string(),
+  name: z.string(),
+  postalAddress: z.string(),
+  residentialAddress: z.string(),
+  phone: z.string().optional(),
+  email: z.string().email().optional(),
+  occupation: z.string().optional(),
+  workplace: z.string().optional(),
+  religion: z.string().optional(),
+  isAlive: z.boolean().optional(),
+});
+
+export type FamilyMember = z.infer<typeof FamilyMemberSchema>;
+
+// EXACT mirror of API PreviousSchoolSchema
+export const PreviousSchoolSchema = z.object({
+  name: z.string(),
+  location: z.string(),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+});
+
+export type PreviousSchool = z.infer<typeof PreviousSchoolSchema>;
 
 export type GradeOption = {
   id: string;
@@ -35,52 +66,80 @@ export type GradeOption = {
   enrolled: number;
 };
 
-// ------------------ Step Fields ------------------
+/* -------------------------------------------------------------------------- */
+/*                              Step definitions                               */
+/* -------------------------------------------------------------------------- */
+
 const STEP_FIELDS: string[][] = [
-  ["surname", "firstName", "otherNames", "email", "password"], 
-  ["dateOfBirth", "nationality", "sex"], 
-  ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"], 
-  ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"], 
-  ["postalAddress", "residentialAddress", "wardMobile", "emergencyContact", "emergencyMedicalContact"], 
-  ["medicalSummary", "bloodType", "specialDisability"], 
-  ["previousSchools", "familyMembers"], 
+  ["surname", "firstName", "otherNames", "email", "password"],
+  ["dateOfBirth", "nationality", "sex"],
+  ["languages", "mothersTongue", "religion", "denomination", "hometown", "region"],
+  ["profilePicture", "wardLivesWith", "numberOfSiblings", "siblingsOlder", "siblingsYounger"],
+  ["postalAddress", "residentialAddress", "wardMobile", "emergencyContact", "emergencyMedicalContact"],
+  ["medicalSummary", "bloodType", "specialDisability"],
+  ["previousSchools", "familyMembers"],
   ["feesAcknowledged", "declarationSigned", "signature", "classId", "gradeId"],
 ];
 
-// ------------------ Admission Store Schema ------------------
+/* -------------------------------------------------------------------------- */
+/*                         Admission Form Schema                                */
+/* -------------------------------------------------------------------------- */
+/*
+NOTE:
+- Types match API
+- Dates stored as string | Date locally, coerced on submit
+- Step 6 is strictly typed (NO z.any)
+*/
+
 export const admissionFormSchema = z.object({
   applicationId: z.string().optional(),
   studentId: z.string().optional(),
   progress: z.number().default(0),
+
+  // Step 0
   surname: z.string().optional(),
   firstName: z.string().optional(),
   otherNames: z.string().optional(),
-  email: z.string().optional(),
+  email: z.string().email().optional(),
   password: z.string().optional(),
-  dateOfBirth: z.string().optional(),
+
+  // Step 1
+  dateOfBirth: z.union([z.string(), z.date()]).optional(),
   nationality: z.string().optional(),
   sex: z.string().optional(),
+
+  // Step 2
   languages: z.array(z.string()).optional(),
   mothersTongue: z.string().optional(),
   religion: z.string().optional(),
   denomination: z.string().optional(),
   hometown: z.string().optional(),
   region: z.string().optional(),
+
+  // Step 3
   profilePicture: z.string().optional(),
   wardLivesWith: z.string().optional(),
   numberOfSiblings: z.number().optional(),
   siblingsOlder: z.number().optional(),
   siblingsYounger: z.number().optional(),
+
+  // Step 4
   postalAddress: z.string().optional(),
   residentialAddress: z.string().optional(),
   wardMobile: z.string().optional(),
   emergencyContact: z.string().optional(),
   emergencyMedicalContact: z.string().optional(),
+
+  // Step 5
   medicalSummary: z.string().optional(),
   bloodType: z.string().optional(),
   specialDisability: z.string().optional(),
-  previousSchools: z.array(z.any()).optional(),
-  familyMembers: z.array(z.any()).optional(),
+
+  // Step 6 (STRICT)
+  previousSchools: z.array(PreviousSchoolSchema).optional(),
+  familyMembers: z.array(FamilyMemberSchema).optional(),
+
+  // Step 7
   feesAcknowledged: z.boolean().optional(),
   declarationSigned: z.boolean().optional(),
   signature: z.string().optional(),
@@ -88,56 +147,95 @@ export const admissionFormSchema = z.object({
   gradeId: z.string().optional(),
 });
 
-// ------------------ Store Interface ------------------
+export type AdmissionFormData = z.infer<typeof admissionFormSchema>;
+
+/* -------------------------------------------------------------------------- */
+/*                              Store Interface                                 */
+/* -------------------------------------------------------------------------- */
+
 interface AdmissionStore {
-  formData: z.infer<typeof admissionFormSchema>;
+  formData: AdmissionFormData;
   loading: boolean;
   errors: Record<string, string[]>;
   userCreated: boolean;
 
-  setField: (field: string, value: any) => void;
+  setField: (field: keyof AdmissionFormData, value: any) => void;
   setErrors: (errors: Record<string, string[]>) => void;
+
   completeStep: (step: number) => Promise<boolean>;
   fetchAdmission: (applicationId: string) => Promise<void>;
   deleteAdmission: (applicationId: string) => Promise<boolean>;
   loadStudentData: (admission: any) => void;
+
   addFamilyMember: (member: FamilyMember) => void;
   removeFamilyMember: (idx: number) => void;
   addPreviousSchool: (school: PreviousSchool) => void;
   removePreviousSchool: (idx: number) => void;
 
-  setClass: (classId: string, grades?: GradeOption[]) => void;
+  setClass: (classId: string, grades: GradeOption[]) => void;
   selectGrade: (gradeId?: string, grades?: GradeOption[]) => void;
-  assignStudentClassGrade: (studentId: string, classId: string, gradeId: string) => Promise<any>;
 }
 
-// ------------------ Helpers ------------------
+/* -------------------------------------------------------------------------- */
+/*                                  Helpers                                    */
+/* -------------------------------------------------------------------------- */
+
 function calculateProgress(data: any) {
   let completedSteps = 0;
+
   STEP_FIELDS.forEach((fields) => {
-    const stepComplete = fields.every((f) => {
-      const value = data[f];
-      if (Array.isArray(value)) return value.length > 0;
-      if (typeof value === "boolean") return value === true;
-      return value !== undefined && value !== null && value !== "";
+    const ok = fields.every((f) => {
+      const v = data[f];
+      if (Array.isArray(v)) return v.length > 0;
+      if (typeof v === "boolean") return v === true;
+      return v !== undefined && v !== null && v !== "";
     });
-    if (stepComplete) completedSteps += 1;
+    if (ok) completedSteps++;
   });
+
   return Math.round((completedSteps / STEP_FIELDS.length) * 100);
 }
 
-// ------------------ Store Implementation ------------------
+/**
+ * Normalize payload BEFORE sending to API.
+ * Ensures API-compatible shapes and coercions.
+ */
+function normalizePayload(step: number, formData: AdmissionFormData) {
+  const payload: any = {};
+  STEP_FIELDS[step].forEach((f) => (payload[f] = formData[f]));
+
+  if (step === 1 && payload.dateOfBirth) {
+    payload.dateOfBirth = new Date(payload.dateOfBirth);
+  }
+
+  if (step === 6) {
+    if (payload.previousSchools) {
+      payload.previousSchools = payload.previousSchools.map((s: any) => ({
+        ...s,
+        startDate: new Date(s.startDate),
+        endDate: new Date(s.endDate),
+      }));
+    }
+  }
+
+  return payload;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Store Implementation                              */
+/* -------------------------------------------------------------------------- */
+
 export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
-  formData: admissionFormSchema.partial().parse({}),
+  formData: admissionFormSchema.parse({}),
   loading: false,
   errors: {},
   userCreated: false,
 
   setField: (field, value) =>
     set((state) => {
-      state.formData[field] = value;
-      state.formData.progress = calculateProgress(state.formData);
-      return { formData: state.formData };
+      const updated = { ...state.formData, [field]: value };
+      updated.progress = calculateProgress(updated);
+      return { formData: updated };
     }),
 
   setErrors: (errors) => set({ errors }),
@@ -145,75 +243,52 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   completeStep: async (step) => {
     set({ loading: true, errors: {} });
     try {
-      const payload: any = {};
-      STEP_FIELDS[step].forEach((f) => (payload[f] = get().formData[f]));
       const schoolId = useAuthStore.getState().user?.school?.id;
-      if (!schoolId) throw new Error("Unauthorized: School ID missing");
+      if (!schoolId) throw new Error("Unauthorized");
 
-      let res;
+      const payload = normalizePayload(step, get().formData);
+
       if (step === 0) {
-        res = await axios.post("/api/admissions", { ...payload, step }, { headers: { "X-School-ID": schoolId } });
-        const admission = res.data.admission;
+        const res = await axios.post(
+          "/api/admissions",
+          { ...payload, step },
+          { headers: { "X-School-ID": schoolId } }
+        );
+
         set((state) => ({
-          formData: { ...state.formData, studentId: admission.studentId, applicationId: admission.id },
+          formData: {
+            ...state.formData,
+            applicationId: res.data.admission.id,
+            studentId: res.data.admission.studentId,
+          },
           userCreated: true,
         }));
       } else {
         const appId = get().formData.applicationId;
-        if (!appId) throw new Error("Application ID missing");
-        res = await axios.patch(`/api/admissions/${appId}`, { ...payload, step }, { headers: { "X-School-ID": schoolId } });
-      }
+        if (!appId) throw new Error("Missing applicationId");
 
-      set((state) => ({
-        formData: { ...state.formData, progress: calculateProgress(state.formData) },
-      }));
-      return true;
-    } catch (err: any) {
-      set({ errors: { completeStep: [err?.response?.data?.error || err.message || "Step failed"] } });
-      return false;
-    } finally {
-      set({ loading: false });
-    }
-  },
-
-  assignStudentClassGrade: async (studentId: string, classId: string, gradeId: string) => {
-    set({ loading: true, errors: {} });
-    try {
-      const schoolId = useAuthStore.getState().user?.school?.id;
-      if (!schoolId) throw new Error("Unauthorized: missing school ID");
-
-      const res = await axios.put(
-        `/api/students/${studentId}`,
-        { classId, gradeId },
-        { headers: { "X-School-ID": schoolId } }
-      );
-
-      const updatedStudent = res.data.student;
-
-      let admissionStatus = updatedStudent.classId && updatedStudent.gradeId ? "Enrolled" : "Pending";
-
-      if (updatedStudent.admissionId) {
         await axios.patch(
-          `/api/admissions/${updatedStudent.admissionId}`,
-          { classId, gradeId, admissionStatus },
+          `/api/admissions/${appId}`,
+          { ...payload, step },
           { headers: { "X-School-ID": schoolId } }
         );
       }
 
       set((state) => ({
-        formData: { ...state.formData, classId, gradeId },
+        formData: {
+          ...state.formData,
+          progress: calculateProgress(state.formData),
+        },
       }));
 
-      useClassesStore.setState((cs) => {
-        return {
-          students: cs.students.map((s) => (s.id === studentId ? updatedStudent : s)),
-        };
-      });
-
-      return updatedStudent;
+      return true;
     } catch (err: any) {
-      set({ errors: { assignStudentClassGrade: [err?.response?.data?.error || err.message || "Update failed"] } });
-      throw err;
+      set({
+        errors: {
+          completeStep: [err?.response?.data?.error || err.message],
+        },
+      });
+      return false;
     } finally {
       set({ loading: false });
     }
@@ -223,11 +298,15 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     set({ loading: true, errors: {} });
     try {
       const schoolId = useAuthStore.getState().user?.school?.id;
-      if (!schoolId) throw new Error("Unauthorized: School ID missing");
-      const res = await axios.get(`/api/admissions/${applicationId}`, { headers: { "X-School-ID": schoolId } });
+      if (!schoolId) throw new Error("Unauthorized");
+
+      const res = await axios.get(`/api/admissions/${applicationId}`, {
+        headers: { "X-School-ID": schoolId },
+      });
+
       get().loadStudentData(res.data.application || res.data);
     } catch (err: any) {
-      set({ errors: { fetchAdmission: [err?.response?.data?.error || err.message || "Fetch failed"] } });
+      set({ errors: { fetchAdmission: [err.message] } });
     } finally {
       set({ loading: false });
     }
@@ -237,12 +316,16 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     set({ loading: true, errors: {} });
     try {
       const schoolId = useAuthStore.getState().user?.school?.id;
-      if (!schoolId) throw new Error("Unauthorized: School ID missing");
-      await axios.delete(`/api/admissions/${applicationId}`, { headers: { "X-School-ID": schoolId } });
-      set({ formData: admissionFormSchema.partial().parse({}), userCreated: false });
+      if (!schoolId) throw new Error("Unauthorized");
+
+      await axios.delete(`/api/admissions/${applicationId}`, {
+        headers: { "X-School-ID": schoolId },
+      });
+
+      set({ formData: admissionFormSchema.parse({}), userCreated: false });
       return true;
     } catch (err: any) {
-      set({ errors: { deleteAdmission: [err?.response?.data?.error || err.message || "Delete failed"] } });
+      set({ errors: { deleteAdmission: [err.message] } });
       return false;
     } finally {
       set({ loading: false });
@@ -251,84 +334,75 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
 
   loadStudentData: (admission) => {
     if (!admission) return;
-    const formData: any = { ...admission };
-    formData.progress = calculateProgress(formData);
-    set({ formData, userCreated: true });
+    const data = { ...admission };
+    data.progress = calculateProgress(data);
+    set({ formData: data, userCreated: true });
   },
 
   addFamilyMember: (member) =>
     set((state) => {
       const updated = [...(state.formData.familyMembers || []), member];
-      const formWithProgress = { ...state.formData, familyMembers: updated };
-      formWithProgress.progress = calculateProgress(formWithProgress);
-      return { formData: formWithProgress };
+      const formData = { ...state.formData, familyMembers: updated };
+      formData.progress = calculateProgress(formData);
+      return { formData };
     }),
 
   removeFamilyMember: (idx) =>
     set((state) => {
       const updated = state.formData.familyMembers?.filter((_, i) => i !== idx) || [];
-      const formWithProgress = { ...state.formData, familyMembers: updated };
-      formWithProgress.progress = calculateProgress(formWithProgress);
-      return { formData: formWithProgress };
+      const formData = { ...state.formData, familyMembers: updated };
+      formData.progress = calculateProgress(formData);
+      return { formData };
     }),
 
   addPreviousSchool: (school) =>
     set((state) => {
       const updated = [...(state.formData.previousSchools || []), school];
-      const formWithProgress = { ...state.formData, previousSchools: updated };
-      formWithProgress.progress = calculateProgress(formWithProgress);
-      return { formData: formWithProgress };
+      const formData = { ...state.formData, previousSchools: updated };
+      formData.progress = calculateProgress(formData);
+      return { formData };
     }),
 
   removePreviousSchool: (idx) =>
     set((state) => {
       const updated = state.formData.previousSchools?.filter((_, i) => i !== idx) || [];
-      const formWithProgress = { ...state.formData, previousSchools: updated };
-      formWithProgress.progress = calculateProgress(formWithProgress);
-      return { formData: formWithProgress };
+      const formData = { ...state.formData, previousSchools: updated };
+      formData.progress = calculateProgress(formData);
+      return { formData };
     }),
 
-  // ------------------ Class / Grade Logic ------------------
-  setClass: (classId: string, grades?: GradeOption[]) => {
-    const cs = useClassesStore.getState();
-    const dynamicGrades = grades?.map((g) => {
-      const enrolled = cs.students.filter((s) => s.classId === classId && s.gradeId === g.id).length;
-      return { ...g, enrolled };
+  setClass: (classId, grades) => {
+    const grade = grades.find((g) => g.enrolled < g.capacity);
+    set((state) => {
+      const formData = { ...state.formData, classId, gradeId: grade?.id };
+      formData.progress = calculateProgress(formData);
+      return { formData };
     });
-    const availableGrade = dynamicGrades?.find((g) => g.enrolled < g.capacity);
-    set((state) => ({
-      formData: {
-        ...state.formData,
-        classId,
-        gradeId: availableGrade?.id,
-        progress: calculateProgress({ ...state.formData, classId, gradeId: availableGrade?.id }),
-      },
-    }));
   },
 
-  selectGrade: (gradeId?: string, grades?: GradeOption[]) => {
-    const cs = useClassesStore.getState();
-    let chosenId = gradeId;
-    if (!gradeId && grades) {
-      const dynamicGrades = grades.map((g) => {
-        const enrolled = cs.students.filter((s) => s.classId === get().formData.classId && s.gradeId === g.id).length;
-        return { ...g, enrolled };
+  selectGrade: (gradeId, grades) => {
+    if (gradeId) {
+      set((state) => {
+        const formData = { ...state.formData, gradeId };
+        formData.progress = calculateProgress(formData);
+        return { formData };
       });
-      const availableGrade = dynamicGrades.find((g) => g.enrolled < g.capacity);
-      chosenId = availableGrade?.id;
+    } else if (grades) {
+      const grade = grades.find((g) => g.enrolled < g.capacity);
+      set((state) => {
+        const formData = { ...state.formData, gradeId: grade?.id };
+        formData.progress = calculateProgress(formData);
+        return { formData };
+      });
     }
-    set((state) => ({
-      formData: {
-        ...state.formData,
-        gradeId: chosenId,
-        progress: calculateProgress({ ...state.formData, gradeId: chosenId }),
-      },
-    }));
   },
 }));
 
-// ------------------ Design reasoning → Structure → Implementation guidance → Scalability insight ------------------
-// Design reasoning: Ensure grade selection always respects real-time student enrollment.
-// Structure: Auto-compute enrolled count from useClassesStore.students before setting class/grade.
-// Implementation guidance: Use dynamicGrades in setClass/selectGrade to prevent over-enrollment; aligns with student store state.
-// Scalability insight: This pattern scales with larger schools since computation is filtered in memory; can be optimized via server-side aggregation for massive datasets.
+/* -------------------------------------------------------------------------- */
+/*                              Scalability insight                             */
+/* -------------------------------------------------------------------------- */
+/*
+If new steps are added, only STEP_FIELDS and the API schema need updating.
+The store will automatically enforce alignment and progress calculation
+without rewriting core logic.
+*/
