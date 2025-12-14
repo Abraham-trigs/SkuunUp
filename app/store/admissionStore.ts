@@ -166,35 +166,56 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     }
   },
 
-  completeStep: async (step) => {
-    set({ loading: true, errors: {} });
-    try {
-      const schoolId = useAuthStore.getState().user?.school?.id;
-      if (!schoolId) throw new Error("Unauthorized");
+completeStep: async (step) => {
+  set({ loading: true, errors: {} });
 
-      const payload = normalizeStepData(step, get().formData);
+  try {
+    const schoolId = useAuthStore.getState().user?.school?.id;
+    if (!schoolId) throw new Error("Unauthorized");
 
-      if (step === 0) {
-        const res = await axios.post("/api/admissions", { ...payload, step }, { headers: { "X-School-ID": schoolId } });
+    const payload = normalizeStepData(step, get().formData);
+
+    if (step === 0) {
+      // Step 0: Create user only if not already created
+      if (get().userCreated && get().formData.applicationId) {
+        // User already exists, update instead of creating
+        await updateAdmission(axios, get().formData.applicationId, 0, payload);
+      } else {
+        // Original creation logic
+        const res = await axios.post("/api/admissions", { ...payload, step }, {
+          headers: { "X-School-ID": schoolId },
+        });
         set((state) => ({
-          formData: { ...state.formData, applicationId: res.data.admission.id, studentId: res.data.admission.studentId },
+          formData: {
+            ...state.formData,
+            applicationId: res.data.admission.id,
+            studentId: res.data.admission.studentId,
+          },
           userCreated: true,
         }));
-      } else {
-        const appId = get().formData.applicationId;
-        if (!appId) throw new Error("Missing applicationId");
-        await updateAdmission(axios, appId, step, payload);
       }
-
-      set((state) => ({ formData: { ...state.formData, progress: calculateProgress(state.formData) } }));
-      return true;
-    } catch (err: any) {
-      set({ errors: { completeStep: [err?.response?.data?.error || err.message] } });
-      return false;
-    } finally {
-      set({ loading: false });
+    } else {
+      // All other steps: update the existing admission
+      const appId = get().formData.applicationId;
+      if (!appId) throw new Error("Missing applicationId for update");
+      await updateAdmission(axios, appId, step, payload);
     }
-  },
+
+    // Update local progress
+    set((state) => ({
+      formData: { ...state.formData, progress: calculateProgress(state.formData) },
+    }));
+
+    return true;
+  } catch (err: any) {
+    set({
+      errors: { completeStep: [err?.response?.data?.error || err.message] },
+    });
+    return false;
+  } finally {
+    set({ loading: false });
+  }
+},
 
   fetchAdmission: async (applicationId) => {
     set({ loading: true, errors: {} });

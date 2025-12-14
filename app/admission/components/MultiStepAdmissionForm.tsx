@@ -1,9 +1,9 @@
 // app/components/admission/MultiStepAdmissionForm.tsx
-// Purpose: Multi-step admission form fully aligned with store + helper functions
+// Purpose: Multi-step admission form fully aligned with store + admission.ts helper functions
 
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useForm, FormProvider, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -73,10 +73,15 @@ export default function MultiStepAdmissionForm() {
     reset,
   } = methods;
 
+  const hydratedRef = useRef(false);
+
   useEffect(() => {
-    reset(formData);
-    fetchClasses();
-  }, [formData, fetchClasses, reset]);
+    if (!hydratedRef.current) {
+      reset(formData); // hydrate once
+      hydratedRef.current = true;
+    }
+    fetchClasses(); // safe to run
+  }, [fetchClasses, reset]);
 
   const familyArray = useFieldArray({ control, name: "familyMembers" });
   const previousArray = useFieldArray({ control, name: "previousSchools" });
