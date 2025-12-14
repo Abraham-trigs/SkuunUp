@@ -169,21 +169,27 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     }
   },
 
-  updateClass: async (id: string, name?: string) => {
-    set({ loading: true });
-    try {
-      const res = await axios.put(`/api/classes/${id}`, { name });
-      set((state) => {
-        const updatedClasses = state.classes.map((c) => (c.id === id ? { ...c, ...res.data } : c));
-        const updatedSelected = state.selectedClass?.id === id ? { ...state.selectedClass, ...res.data } : state.selectedClass;
-        return { classes: updatedClasses, selectedClass: updatedSelected, loading: false };
-      });
-      return true;
-    } catch (err: any) {
-      set({ error: err.response?.data?.error || err.message, loading: false });
-      return false;
-    }
-  },
+updateClass: async (id: string, name?: string) => {
+  set({ loading: true });
+  try {
+    const res = await axios.put(`/api/classes/${id}`, { name });
+    set((state) => {
+      const updatedClasses = state.classes.map((c) =>
+        c.id === id ? { ...c, ...res.data } : c
+      );
+      const updatedSelected =
+        state.selectedClass?.id === id
+          ? { ...state.selectedClass, ...res.data }
+          : state.selectedClass;
+      return { classes: updatedClasses, selectedClass: updatedSelected, loading: false };
+    });
+    return { success: true };
+  } catch (err: any) {
+    const errorMessage = err.response?.data?.error || err.message || "Unknown error";
+    set({ error: errorMessage, loading: false });
+    return { success: false, error: errorMessage };
+  }
+},
 
   deleteClass: async (id: string) => {
     set({ loading: true });

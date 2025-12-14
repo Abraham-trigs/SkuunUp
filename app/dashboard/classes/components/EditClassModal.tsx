@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
-import { useClassesStore } from "@/app/store/useClassesStore.ts";
+import { useClassesStore } from "@/app/store/useClassesStore";
 
 interface EditClassModalProps {
   isOpen: boolean;
@@ -17,82 +17,118 @@ export default function EditClassModal({
 }: EditClassModalProps) {
   const { selectedClass, updateClass, loading, clearSelectedClass } =
     useClassesStore();
+
   const [name, setName] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  // Keep input synced when a class is selected or changed
+  // Sync input with store selection when modal opens
   useEffect(() => {
-    if (selectedClass) setName(selectedClass.name);
-  }, [selectedClass]);
+    if (isOpen && selectedClass) {
+      setName(selectedClass.name);
+      setError(null);
+    }
+  }, [isOpen, selectedClass]);
 
-  // Cleanup when modal closes
+  // Cleanup on close
   useEffect(() => {
     if (!isOpen) {
       setName("");
-      setError("");
-      clearSelectedClass?.(); // optional: clear store selection when closing
+      setError(null);
+      clearSelectedClass?.();
     }
   }, [isOpen, clearSelectedClass]);
 
+  // Prevent rendering if modal not open or no class selected
   if (!isOpen || !selectedClass) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setError(null);
 
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setError("Class name cannot be empty");
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      setError("Class name cannot be empty.");
       return;
     }
 
-    const { success } = await updateClass(selectedClass.id, trimmed);
-
-    if (success) {
-      onSuccess?.();
+    // Skip update if nothing changed
+    if (trimmedName === selectedClass.name) {
       onClose();
-    } else {
-      setError("Failed to update class. Try again.");
+      return;
+    }
+
+    try {
+      const result = await updateClass(selectedClass.id, trimmedName);
+
+      if (result?.success) {
+        onSuccess?.();
+        onClose();
+      } else {
+        setError(
+          result?.error ??
+            "Unable to update class. Please check your connection and try again."
+        );
+      }
+    } catch (err: any) {
+      setError(err?.message ?? "Unexpected error while updating class.");
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
-        <h2 className="text-xl font-semibold mb-4">Edit Class</h2>
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+    >
+      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+        <h2 className="mb-4 text-xl font-semibold">Edit Class</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Class Name</label>
+            <label
+              htmlFor="class-name"
+              className="mb-1 block text-sm font-medium"
+            >
+              Class name
+            </label>
             <input
+              id="class-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border px-3 py-2 rounded focus:outline-ford-primary"
-              placeholder="Enter class name"
-              required
+              autoFocus
+              disabled={loading}
+              className="w-full rounded border px-3 py-2 focus:outline-ford-primary disabled:bg-gray-100"
+              placeholder="e.g. Grade 6"
             />
           </div>
 
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-red-600">
+              {error}
+            </p>
+          )}
 
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+              disabled={loading}
+              className="rounded bg-gray-200 px-4 py-2 hover:bg-gray-300 disabled:opacity-50"
             >
               Cancel
             </button>
+
             <button
               type="submit"
               disabled={loading}
               className={clsx(
-                "px-4 py-2 rounded bg-ford-primary text-white hover:bg-ford-secondary",
-                loading && "opacity-50 cursor-not-allowed"
+                "rounded bg-ford-primary px-4 py-2 text-white hover:bg-ford-secondary",
+                loading && "cursor-not-allowed opacity-50"
               )}
             >
-              {loading ? "Updating..." : "Update"}
+              {loading ? "Updating…" : "Update"}
             </button>
           </div>
         </form>

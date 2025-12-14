@@ -208,7 +208,9 @@ export default function ClassesPage() {
       {editOpen && selectedClass && (
         <EditClassModal
           isOpen={editOpen}
-          onClose={() => setEditOpen(false)}
+          onClose={() => {
+            setEditOpen(false);
+          }}
           onSuccess={() => fetchClasses()}
         />
       )}
