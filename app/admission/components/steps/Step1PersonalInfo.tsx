@@ -1,5 +1,5 @@
 // app/admission/components/Step1PersonalInfo.tsx
-// Purpose: Step 1 of the admission form — captures personal info with normalized inputs.
+// Purpose: Step 1 of the admission form — captures personal info with normalized inputs and country dropdown with dynamic "Other" input.
 
 "use client";
 
@@ -7,8 +7,33 @@ import React from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import LabeledInput from "./LabeledInput.tsx";
 
+const countries = [
+  "Ghana",
+  "Nigeria",
+  "Kenya",
+  "South Africa",
+  "United States",
+  "United Kingdom",
+  "Canada",
+  "India",
+  "Australia",
+  "Other",
+];
+
 export default function StepPersonalInfo() {
   const { formData, setField } = useAdmissionStore();
+
+  const handleDropdownChange = (value: string) => {
+    if (value === "Other") {
+      setField("nationality", ""); // clear for user input
+    } else {
+      setField("nationality", value);
+    }
+  };
+
+  const isOther =
+    !countries.includes(formData.nationality || "") &&
+    formData.nationality !== "";
 
   return (
     <div className="space-y-4">
@@ -24,38 +49,54 @@ export default function StepPersonalInfo() {
           setField("dateOfBirth", v ? new Date(v).toISOString() : "")
         }
       />
-      <LabeledInput
-        label="Nationality"
-        value={formData.nationality || ""}
-        onChangeValue={(v: string) => setField("nationality", v)}
-        placeholder="Enter nationality"
-      />
-      <LabeledInput
-        label="Sex"
-        value={formData.sex || ""}
-        onChangeValue={(v: string) => setField("sex", v)}
-        placeholder="Enter sex"
-      />
+
+      <div className="flex flex-col space-y-2">
+        <label htmlFor="nationality" className="mb-1 font-medium text-sm">
+          Nationality
+        </label>
+        <select
+          id="nationality"
+          value={
+            countries.includes(formData.nationality || "")
+              ? formData.nationality
+              : "Other"
+          }
+          onChange={(e) => handleDropdownChange(e.target.value)}
+          className="border rounded p-2 focus:outline-none focus:ring focus:ring-blue-300"
+        >
+          <option value="" disabled>
+            Select nationality
+          </option>
+          {countries.map((country) => (
+            <option key={country} value={country}>
+              {country}
+            </option>
+          ))}
+        </select>
+
+        {/* Show input if "Other" is selected */}
+        {countries.includes(formData.nationality || "") === false ||
+        formData.nationality === "" ? (
+          <LabeledInput
+            label="Enter Nationality"
+            value={formData.nationality || ""}
+            onChangeValue={(v: string) => setField("nationality", v)}
+            placeholder="Type your nationality"
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
 
 /*
 Design reasoning:
-- Ensures all onChangeValue callbacks send normalized string/ISO data to the store.
-- Prevents [object Object] issues caused by passing event objects instead of string values.
-- Maintains date consistency across forms using ISO string format.
-
+- Simplifies handling by using a single "nationality" field in the store.
+- Selecting "Other" shows a text input where the typed value updates the store directly.
 Structure:
-- Functional component StepPersonalInfo
-- Uses useAdmissionStore to update state
-- Three fields: dateOfBirth, nationality, sex
-
+- StepPersonalInfo component with DOB, country dropdown, and dynamic input for "Other".
 Implementation guidance:
-- Always use onChangeValue for LabeledInput to avoid raw event objects.
-- Normalize date inputs before sending to store.
-
+- Ensure store has a "nationality" field. Backend always reads this field.
 Scalability insight:
-- Adding more personal info fields is straightforward.
-- Pattern ensures consistent state updates and avoids UX bugs in multi-step forms.
+- Can extend countries array or replace with API-based dynamic list while keeping same "Other" logic.
 */

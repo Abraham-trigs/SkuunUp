@@ -1,9 +1,15 @@
+// app/admission/components/Step0UserInfo.tsx
+// Purpose: Step 0 of the multi-step admission form including basic user info and sex selection dropdown.
+
 "use client";
 
 import React, { useEffect } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import { useAuthStore } from "@/app/store/useAuthStore.ts";
 import LabeledInput from "./LabeledInput.tsx";
+
+// ------------------ Types ------------------
+type SexOption = "Male" | "Female" | "Other";
 
 export default function StepUserInfo() {
   const { formData, setField } = useAdmissionStore();
@@ -15,6 +21,8 @@ export default function StepUserInfo() {
       setField("schoolDomain", `@${user.school.domain}`);
     }
   }, [user, formData.schoolDomain, setField]);
+
+  const sexOptions: SexOption[] = ["Male", "Female", "Other"];
 
   return (
     <div className="space-y-4">
@@ -44,7 +52,6 @@ export default function StepUserInfo() {
             : ""
         }
         onChangeValue={(v) => {
-          // Strip any domain typed by user, keep only local part
           const localPart = v.split("@")[0];
           const fullEmail = formData.schoolDomain
             ? `${localPart}${formData.schoolDomain}`
@@ -53,7 +60,7 @@ export default function StepUserInfo() {
         }}
         placeholder="Enter your account name"
         type="email"
-        suffix={formData.schoolDomain} // visually display domain next to input
+        suffix={formData.schoolDomain}
       />
       <LabeledInput
         label="Password"
@@ -62,6 +69,34 @@ export default function StepUserInfo() {
         placeholder="Enter password"
         type="password"
       />
+      {/* Sex dropdown */}
+      <div className="flex flex-col">
+        <label htmlFor="sex" className="mb-1 font-medium text-sm">
+          Sex
+        </label>
+        <select
+          id="sex"
+          value={formData.sex || ""}
+          onChange={(e) => setField("sex", e.target.value as SexOption)}
+          className="border rounded p-2 focus:outline-none focus:ring focus:ring-blue-300"
+        >
+          <option value="" disabled>
+            Select sex
+          </option>
+          {sexOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
+
+/* 
+Design reasoning: Added a dropdown for sex selection to standardize input and reduce errors. Using a controlled select tied to Zustand store ensures reactivity and form consistency.
+Structure: Exports StepUserInfo component; includes LabeledInput fields and a new sex <select>.
+Implementation guidance: Can drop into Step 0 of multi-step form; store field "sex" must exist in admissionStore.
+Scalability insight: Additional sex/gender options can be added to sexOptions array; validation can enforce allowed values in Zod schema.
+*/
