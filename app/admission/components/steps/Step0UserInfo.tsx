@@ -1,14 +1,20 @@
-// app/admission/components/Step0UserInfo.tsx
-// Purpose: Step 0 of the admission form — captures basic user info with fully normalized inputs.
-
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
+import { useAuthStore } from "@/app/store/useAuthStore.ts";
 import LabeledInput from "./LabeledInput.tsx";
 
 export default function StepUserInfo() {
   const { formData, setField } = useAdmissionStore();
+  const { user } = useAuthStore();
+
+  // Set default school domain with "@" prefix if not already set
+  useEffect(() => {
+    if (user?.school?.domain && !formData.schoolDomain) {
+      setField("schoolDomain", `@${user.school.domain}`);
+    }
+  }, [user, formData.schoolDomain, setField]);
 
   return (
     <div className="space-y-4">
@@ -32,10 +38,22 @@ export default function StepUserInfo() {
       />
       <LabeledInput
         label="Email"
-        value={formData.email || ""}
-        onChangeValue={(v) => setField("email", v)}
-        placeholder="Enter email"
+        value={
+          formData.email
+            ? formData.email.replace(formData.schoolDomain || "", "")
+            : ""
+        }
+        onChangeValue={(v) => {
+          // Strip any domain typed by user, keep only local part
+          const localPart = v.split("@")[0];
+          const fullEmail = formData.schoolDomain
+            ? `${localPart}${formData.schoolDomain}`
+            : localPart;
+          setField("email", fullEmail);
+        }}
+        placeholder="Enter your account name"
         type="email"
+        suffix={formData.schoolDomain} // visually display domain next to input
       />
       <LabeledInput
         label="Password"
@@ -47,24 +65,3 @@ export default function StepUserInfo() {
     </div>
   );
 }
-
-/*
-Design reasoning:
-- Uses the updated LabeledInput to normalize onChange events.
-- Prevents [object Object] being set in the store.
-- Each input updates zustand state directly and maintains progress tracking.
-
-Structure:
-- Single functional component for Step 0.
-- Five input fields: surname, firstName, otherNames, email, password.
-- Uses useAdmissionStore for state management.
-
-Implementation guidance:
-- Ensure all other step components follow the same onChangeValue pattern.
-- Drop-in replacement for the previous Step0UserInfo.tsx.
-- Maintains TypeScript type safety.
-
-Scalability insight:
-- Pattern can be reused across all multi-step forms.
-- Centralizing input normalization reduces bugs and ensures consistent UX.
-*/

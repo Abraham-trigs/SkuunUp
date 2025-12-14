@@ -1,5 +1,5 @@
 // app/admission/components/LabeledInput.tsx
-// Purpose: Accessible, reusable input with label, error display, and normalized onChange for form usage.
+// Purpose: Accessible, reusable input with label, error display, normalized onChange, and optional suffix.
 
 "use client";
 
@@ -11,45 +11,35 @@ interface LabeledInputProps
   error?: string;
   /** Returns the input value directly instead of the event object */
   onChangeValue?: (value: string) => void;
+  /** Optional suffix displayed inside the input */
+  suffix?: string;
 }
 
 export default function LabeledInput({
   label,
   error,
   onChangeValue,
+  suffix,
   ...props
 }: LabeledInputProps) {
   return (
     <div className="flex flex-col w-full mb-4">
       <label className="mb-1 text-gray-700 font-medium">{label}</label>
-      <input
-        {...props}
-        onChange={(e) => onChangeValue?.(e.target.value)}
-        className={`border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-          error ? "border-red-500" : "border-gray-300"
-        }`}
-      />
+      <div className="relative w-full">
+        <input
+          {...props}
+          onChange={(e) => onChangeValue?.(e.target.value)}
+          className={`border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full ${
+            suffix ? "pr-20" : ""
+          } ${error ? "border-red-500" : "border-gray-300"}`}
+        />
+        {suffix && (
+          <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none">
+            {suffix}
+          </span>
+        )}
+      </div>
       {error && <span className="text-red-600 text-xs mt-1">{error}</span>}
     </div>
   );
 }
-
-/*
-Design reasoning:
-- Normalizes input events so parent components receive only the raw value.
-- Provides error display and accessible label.
-- Prevents accidental [object Object] assignments in state.
-
-Structure:
-- Single LabeledInput component
-- Props: label, error, onChangeValue, plus all other input attributes via spread
-
-Implementation guidance:
-- Replace all current uses of LabeledInput with onChangeValue for updating zustand or form state.
-- Optional error prop displays field-specific messages.
-- Supports all standard HTML input types.
-
-Scalability insight:
-- Can be extended to handle select, textarea, or masked inputs consistently.
-- Centralizing onChange normalization avoids repeating e.target.value extraction across all forms.
-*/
