@@ -8,7 +8,7 @@ import AuthGuard from "@/app/components/AuthGuard";
 
 // Dynamically import the multi-step form to ensure client-only rendering
 const MultiStepAdmissionForm = dynamic(
-  () => import("./components/MultiStepAdmissionForm.tsx"),
+  () => import("./components/steps/MultiStepAdmissionForm.tsx"),
   { ssr: false }
 );
 
