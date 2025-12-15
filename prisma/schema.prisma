@@ -89,8 +89,9 @@ model User {
   // Each user can have exactly ONE application
   application Application? @relation("UserApplication")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  SkuunAiSession SkuunAiSession[]
 }
 
 // prisma/application.prisma
@@ -140,18 +141,18 @@ model Class {
 
 // ------------------ Grade / Section ------------------
 model Grade {
-  id          String       @id @default(cuid())
-  name        String       @default("A") // defaults to "A" if not specified
-  classId     String?      // nullable foreign key
-  class       Class?       @relation(fields: [classId], references: [id])
+  id      String  @id @default(cuid())
+  name    String  @default("A") // defaults to "A" if not specified
+  classId String? // nullable foreign key
+  class   Class?  @relation(fields: [classId], references: [id])
 
-  students    Student[]    // optional
+  students Student[] // optional
 
   // Many-to-many relation with Staff (for multiple grade assignments)
-  staff       Staff[]      @relation("StaffGrades")
+  staff Staff[] @relation("StaffGrades")
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
   Application Application[]
 
   @@unique([name, classId])
@@ -651,209 +652,153 @@ model Bus {
 }
 
 // ---------------------------
-// Core User / Abraham
+// SkuunAi Models
 // ---------------------------
-model Abraham {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      UserRole
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  projects     Project[]
-  tasks        Task[]
-  milestones   Milestone[]
-  aiContents   AIContent[]
-  goals        Goal[]
-  chatSessions ChatSession[]
-  aiActions    AIAction[]
-  cvs          AbrahamCV[]
+model SkuunAiSession {
+  id                    String                  @id @default(cuid())
+  user                  User                    @relation(fields: [userId], references: [id])
+  userId                String
+  role                  Role // Role of logged-in user for scoping
+  messages              SkuunAiMessage[]
+  actions               SkuunAiAction[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  SkuunAiRecommendation SkuunAiRecommendation[]
 }
 
-enum UserRole {
-  ADMIN
-  MODERATOR
-  USER
-}
-
-// ---------------------------
-// Goals & Projects
-// ---------------------------
-model Goal {
-  id          String     @id @default(cuid())
-  title       String
-  description String
-  status      GoalStatus @default(ACTIVE)
-  dueDate     DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  owner   Abraham @relation(fields: [ownerId], references: [id])
-  ownerId String
-
-  projects  Project[]
-  sessions  ChatSession[]
-  AbrahamCV AbrahamCV[]
-}
-
-enum GoalStatus {
-  ACTIVE
-  PAUSED
-  COMPLETED
-}
-
-model Project {
-  id          String        @id @default(cuid())
-  title       String
-  description String
-  demoUrl     String?
-  stack       String
-  status      ProjectStatus @default(ACTIVE)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  owner   Abraham @relation(fields: [ownerId], references: [id])
-  ownerId String
-
-  goal   Goal?   @relation(fields: [goalId], references: [id])
-  goalId String?
-
-  tasks      Task[]
-  milestones Milestone[]
-}
-
-enum ProjectStatus {
-  ACTIVE
-  PAUSED
-  COMPLETED
-}
-
-// ---------------------------
-// Tasks & Milestones
-// ---------------------------
-model Task {
-  id          String      @id @default(cuid())
-  project     Project     @relation(fields: [projectId], references: [id])
-  projectId   String
-  title       String
-  description String
-  status      TaskStatus  @default(TODO)
-  priority    Int         @default(3)
-  milestone   Milestone?  @relation(fields: [milestoneId], references: [id])
-  milestoneId String?
-  aiContent   AIContent[]
-
-  owner   Abraham @relation(fields: [ownerId], references: [id])
-  ownerId String
-}
-
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  DONE
-}
-
-model Milestone {
-  id            String   @id @default(cuid())
-  project       Project  @relation(fields: [projectId], references: [id])
-  projectId     String
-  title         String
-  dueDate       DateTime
-  completed     Boolean  @default(false)
-  paymentAmount Float
-  tasks         Task[]
-
-  owner   Abraham @relation(fields: [ownerId], references: [id])
-  ownerId String
-}
-
-// ---------------------------
-// AI Content & Actions
-// ---------------------------
-model AIContent {
-  id        String   @id @default(cuid())
-  task      Task     @relation(fields: [taskId], references: [id])
-  taskId    String
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  owner   Abraham @relation(fields: [ownerId], references: [id])
-  ownerId String
-}
-
-model AIAction {
-  id        String       @id @default(cuid())
-  session   ChatSession  @relation(fields: [sessionId], references: [id])
+model SkuunAiMessage {
+  id        String         @id @default(cuid())
+  session   SkuunAiSession @relation(fields: [sessionId], references: [id])
   sessionId String
-  message   ChatMessage? @relation(fields: [messageId], references: [id])
-  messageId String? // optional link to ChatMessage for undo
-  type      AIActionType
-  payload   Json
-  createdAt DateTime     @default(now())
-  Abraham   Abraham?     @relation(fields: [abrahamId], references: [id])
-  abrahamId String?
-}
-
-enum AIActionType {
-  SUBMIT_CV
-  ALLOCATE_FUNDS
-  CREATE_TASK
-  ASK_QUESTION
-}
-
-// ---------------------------
-// CVs
-// ---------------------------
-model AbrahamCV {
-  id        String   @id @default(cuid())
-  user      Abraham  @relation(fields: [userId], references: [id])
-  userId    String
-  goal      Goal?    @relation(fields: [goalId], references: [id])
-  goalId    String?
+  sender    SenderType
+  type      MessageType
   content   String
-  updatedAt DateTime @updatedAt
+  payload   Json? // Optional structured data (recommendations, predictions)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 }
 
-// ---------------------------
-// Chat Sessions & Messages
-// ---------------------------
-model ChatSession {
-  id        String        @id @default(cuid())
-  goal      Goal?         @relation(fields: [goalId], references: [id])
-  goalId    String?
-  owner     Abraham       @relation(fields: [ownerId], references: [id])
-  ownerId   String
-  messages  ChatMessage[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  AIAction  AIAction[]
+model SkuunAiAction {
+  id         String         @id @default(cuid())
+  session    SkuunAiSession @relation(fields: [sessionId], references: [id])
+  sessionId  String
+  type       AIActionType
+  payload    Json
+  status     ActionStatus   @default(PENDING)
+  executedAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 }
 
-model ChatMessage {
-  id            String        @id @default(cuid())
-  session       ChatSession   @relation(fields: [sessionId], references: [id])
-  sessionId     String
-  sender        SenderType
-  type          MessageType
-  content       String
-  actionType    AIActionType? // optional, only for ACTION
-  actionPayload Json? // optional JSON payload for ACTION
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  AIAction      AIAction[]
+enum ActionStatus {
+  PENDING
+  EXECUTED
+  FAILED
 }
 
 enum SenderType {
   USER
   AI
+  SYSTEM
 }
 
 enum MessageType {
-  USER
-  AI
-  QUESTION
-  ACTION
+  TEXT
+  JSON
+  IMAGE
+}
+
+enum AIActionType {
+  // ---------- Admissions & Student Management ----------
+  GUIDE_APPLICATION
+  VALIDATE_APPLICATION
+  PREDICT_GRADE_PLACEMENT
+  SUGGEST_SUBJECTS
+  GENERATE_PROFILE
+  FLAG_SPECIAL_NEEDS
+  FLAG_AT_RISK_STUDENTS
+  SUGGEST_INTERVENTIONS
+  TRACK_APPLICATION_PROGRESS
+
+  // ---------- Staff & HR Management ----------
+  STAFF_ROLE_ALLOCATION
+  GENERATE_STAFF_SCHEDULE
+  TRACK_STAFF_WORKLOAD
+  SUMMARIZE_PREVIOUS_JOBS
+  SUGGEST_HIRING_DECISIONS
+
+  // ---------- Classes, Grades & Subjects ----------
+  SUGGEST_CLASS_DISTRIBUTION
+  SUGGEST_SUBJECT_TEACHER_ALLOCATION
+  DETECT_MISSING_ASSIGNMENTS
+  GENERATE_CLASS_REPORTS
+  PREDICT_STUDENT_PERFORMANCE
+
+  // ---------- Exams & Academic Performance ----------
+  TRACK_EXAM_RESULTS
+  SUGGEST_ADAPTIVE_PATHS
+  CORRELATE_SCORE_ATTENDANCE
+  GENERATE_EXAM_REPORTS
+
+  // ---------- Attendance ----------
+  PREDICT_ATTENDANCE
+  GENERATE_ATTENDANCE_SUMMARIES
+  SUGGEST_ATTENDANCE_INTERVENTIONS
+
+  // ---------- Library & Resources ----------
+  TRACK_LIBRARY_USAGE
+  PREDICT_RESOURCE_NEEDS
+  NOTIFY_OVERDUE_ITEMS
+  RECOMMEND_NEW_RESOURCES
+  OPTIMIZE_LIBRARY_OPERATIONS
+
+  // ---------- Finance & Transactions ----------
+  FINANCIAL_INSIGHTS
+  FLAG_LATE_PAYMENTS
+  SUGGEST_BUDGET_ALLOCATIONS
+  GENERATE_FINANCIAL_REPORTS
+
+  // ---------- School Operations & Assets ----------
+  OPTIMIZE_BUS_ROUTES
+  TRACK_ASSETS
+  PREDICT_RESOURCE_SHORTAGES
+  SUGGEST_ACTIVITY_SCHEDULES
+
+  // ---------- Projects, Tasks & Milestones (Abraham module) ----------
+  TRACK_TASKS
+  GENERATE_PROJECT_PLANS
+  PREDICT_PROJECT_DELAYS
+  ASSIST_TASK_ALLOCATION
+  GENERATE_AI_CONTENT
+  ALIGN_GOALS
+
+  // ---------- AI Interactions & Automation ----------
+  CHAT_QA
+  AUTOMATE_REMINDERS
+  EXECUTE_ADMIN_ACTION
+  SUGGEST_POLICY_IMPROVEMENTS
+  GENERATE_SUMMARIES
+  TRACK_AI_ACTIONS
+
+  // ---------- Predictive & Analytical Insights ----------
+  PREDICT_STUDENT_TRENDS
+  PREDICT_STAFF_TRENDS
+  ALERT_CRITICAL_ISSUES
+  SUGGEST_INTERVENTION_PLANS
+}
+
+// ---------------------------
+// Optional: AI Recommendations
+// ---------------------------
+model SkuunAiRecommendation {
+  id        String         @id @default(cuid())
+  session   SkuunAiSession @relation(fields: [sessionId], references: [id])
+  sessionId String
+  category  String // e.g., "Attendance", "Finance", "Admissions"
+  targetId  String? // Optional ID the recommendation is for (student, staff, resource)
+  message   String // AI-generated recommendation
+  data      Json? // Any structured insights
+  resolved  Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 }
