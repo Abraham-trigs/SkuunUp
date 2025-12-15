@@ -1,9 +1,6 @@
-// app/admission/components/Step1PersonalInfo.tsx
-// Purpose: Step 1 of the admission form — captures personal info with normalized inputs and country dropdown with dynamic "Other" input.
-
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import LabeledInput from "./LabeledInput.tsx";
 
@@ -22,6 +19,13 @@ const countries = [
 
 export default function StepPersonalInfo() {
   const { formData, setField } = useAdmissionStore();
+
+  // Set default nationality to Ghana if empty
+  useEffect(() => {
+    if (!formData.nationality) {
+      setField("nationality", "Ghana");
+    }
+  }, [formData.nationality, setField]);
 
   const handleDropdownChange = (value: string) => {
     if (value === "Other") {
@@ -75,28 +79,15 @@ export default function StepPersonalInfo() {
         </select>
 
         {/* Show input if "Other" is selected */}
-        {countries.includes(formData.nationality || "") === false ||
-        formData.nationality === "" ? (
+        {isOther && (
           <LabeledInput
             label="Enter Nationality"
             value={formData.nationality || ""}
             onChangeValue={(v: string) => setField("nationality", v)}
             placeholder="Type your nationality"
           />
-        ) : null}
+        )}
       </div>
     </div>
   );
 }
-
-/*
-Design reasoning:
-- Simplifies handling by using a single "nationality" field in the store.
-- Selecting "Other" shows a text input where the typed value updates the store directly.
-Structure:
-- StepPersonalInfo component with DOB, country dropdown, and dynamic input for "Other".
-Implementation guidance:
-- Ensure store has a "nationality" field. Backend always reads this field.
-Scalability insight:
-- Can extend countries array or replace with API-based dynamic list while keeping same "Other" logic.
-*/

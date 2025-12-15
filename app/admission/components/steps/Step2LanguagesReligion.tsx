@@ -1,82 +1,240 @@
-// app/admission/components/Step2LanguagesReligion.tsx
-// Purpose: Step 2 of the admission form — captures languages, religion, and region info with normalized inputs.
-
 "use client";
 
 import React from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import LabeledInput from "./LabeledInput.tsx";
 
+const languagesList = [
+  "English",
+  "Akan (Twi/Fante)",
+  "Ewe",
+  "Ga",
+  "Dagbani",
+  "Dangme",
+  "Dagaare",
+  "Gonja",
+  "Hausa",
+  "Nzema",
+  "Other",
+];
+
+const religionList = [
+  "Christianity",
+  "Islam",
+  "Traditional African Religion",
+  "None",
+  "Other",
+];
+
+const denominationList = [
+  "Pentecostal / Charismatic",
+  "Protestant",
+  "Catholic",
+  "Methodist",
+  "Seventh-day Adventist",
+  "Muslim (Sunni)",
+  "Traditional / Indigenous",
+  "Other",
+];
+
+const regionList = [
+  "Greater Accra",
+  "Ashanti",
+  "Eastern",
+  "Western",
+  "Central",
+  "Northern",
+  "Upper East",
+  "Upper West",
+  "Volta",
+  "Oti",
+  "Bono",
+  "Bono East",
+  "Ahafo",
+  "Savannah",
+  "North East",
+  "Western North",
+  "Other",
+];
+
 export default function StepLanguagesReligion() {
   const { formData, setField } = useAdmissionStore();
 
+  const handleDropdownChange = (
+    field: "languages" | "religion" | "denomination" | "region",
+    value: string
+  ) => {
+    setField(field, value === "Other" ? "" : value);
+  };
+
+  const isOtherLanguage =
+    !languagesList.includes(formData.languages || "") &&
+    formData.languages !== "";
+  const isOtherReligion =
+    !religionList.includes(formData.religion || "") && formData.religion !== "";
+  const isOtherDenomination =
+    !denominationList.includes(formData.denomination || "") &&
+    formData.denomination !== "";
+  const isOtherRegion =
+    !regionList.includes(formData.region || "") && formData.region !== "";
+
   return (
     <div className="space-y-4">
-      <LabeledInput
-        label="Languages"
-        value={formData.languages?.join(", ") || ""}
-        onChangeValue={(v) =>
-          setField(
-            "languages",
-            v
-              .split(",")
-              .map((s) => s.trim())
-              .filter((s) => s.length > 0)
-          )
-        }
-        placeholder="Enter languages separated by comma"
-      />
+      {/* Languages */}
+      <div className="flex flex-col space-y-2">
+        <label htmlFor="languages" className="mb-1 font-medium text-sm">
+          Languages
+        </label>
+        <select
+          id="languages"
+          value={
+            languagesList.includes(formData.languages || "")
+              ? formData.languages
+              : "Other"
+          }
+          onChange={(e) => handleDropdownChange("languages", e.target.value)}
+          className="border rounded p-2 focus:outline-none focus:ring focus:ring-blue-300"
+        >
+          <option value="" disabled>
+            Select language
+          </option>
+          {languagesList.map((lang) => (
+            <option key={lang} value={lang}>
+              {lang}
+            </option>
+          ))}
+        </select>
+
+        {isOtherLanguage && (
+          <LabeledInput
+            label="Enter Language"
+            value={formData.languages || ""}
+            onChangeValue={(v: string) => setField("languages", v)}
+            placeholder="Type your language"
+          />
+        )}
+      </div>
+
+      {/* Mother's Tongue */}
       <LabeledInput
         label="Mother's Tongue"
         value={formData.mothersTongue || ""}
         onChangeValue={(v) => setField("mothersTongue", v)}
         placeholder="Enter mother's tongue"
       />
-      <LabeledInput
-        label="Religion"
-        value={formData.religion || ""}
-        onChangeValue={(v) => setField("religion", v)}
-        placeholder="Enter religion"
-      />
-      <LabeledInput
-        label="Denomination"
-        value={formData.denomination || ""}
-        onChangeValue={(v) => setField("denomination", v)}
-        placeholder="Enter denomination"
-      />
+
+      {/* Region */}
+      <div className="flex flex-col space-y-2">
+        <label htmlFor="region" className="mb-1 font-medium text-sm">
+          Region
+        </label>
+        <select
+          id="region"
+          value={
+            regionList.includes(formData.region || "")
+              ? formData.region
+              : "Other"
+          }
+          onChange={(e) => handleDropdownChange("region", e.target.value)}
+          className="border rounded p-2 focus:outline-none focus:ring focus:ring-blue-300"
+        >
+          <option value="" disabled>
+            Select region
+          </option>
+          {regionList.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+
+        {isOtherRegion && (
+          <LabeledInput
+            label="Enter Region"
+            value={formData.region || ""}
+            onChangeValue={(v: string) => setField("region", v)}
+            placeholder="Type your region"
+          />
+        )}
+      </div>
+
+      {/* Hometown */}
       <LabeledInput
         label="Hometown"
         value={formData.hometown || ""}
         onChangeValue={(v) => setField("hometown", v)}
         placeholder="Enter hometown"
       />
-      <LabeledInput
-        label="Region"
-        value={formData.region || ""}
-        onChangeValue={(v) => setField("region", v)}
-        placeholder="Enter region"
-      />
+
+      {/* Religion */}
+      <div className="flex flex-col space-y-2">
+        <label htmlFor="religion" className="mb-1 font-medium text-sm">
+          Religion
+        </label>
+        <select
+          id="religion"
+          value={
+            religionList.includes(formData.religion || "")
+              ? formData.religion
+              : "Other"
+          }
+          onChange={(e) => handleDropdownChange("religion", e.target.value)}
+          className="border rounded p-2 focus:outline-none focus:ring focus:ring-blue-300"
+        >
+          <option value="" disabled>
+            Select religion
+          </option>
+          {religionList.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+
+        {isOtherReligion && (
+          <LabeledInput
+            label="Enter Religion"
+            value={formData.religion || ""}
+            onChangeValue={(v: string) => setField("religion", v)}
+            placeholder="Type your religion"
+          />
+        )}
+      </div>
+
+      {/* Denomination */}
+      <div className="flex flex-col space-y-2">
+        <label htmlFor="denomination" className="mb-1 font-medium text-sm">
+          Denomination
+        </label>
+        <select
+          id="denomination"
+          value={
+            denominationList.includes(formData.denomination || "")
+              ? formData.denomination
+              : "Other"
+          }
+          onChange={(e) => handleDropdownChange("denomination", e.target.value)}
+          className="border rounded p-2 focus:outline-none focus:ring focus:ring-blue-300"
+        >
+          <option value="" disabled>
+            Select denomination
+          </option>
+          {denominationList.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+
+        {isOtherDenomination && (
+          <LabeledInput
+            label="Enter Denomination"
+            value={formData.denomination || ""}
+            onChangeValue={(v: string) => setField("denomination", v)}
+            placeholder="Type your denomination"
+          />
+        )}
+      </div>
     </div>
   );
 }
-
-/*
-Design reasoning:
-- Uses onChangeValue to normalize input events and prevent [object Object] bugs.
-- Languages are handled as a CSV string input, stored as an array in the store.
-- All other text inputs are directly mapped to store fields.
-
-Structure:
-- Single functional component for Step 2.
-- Six input fields: languages, mothersTongue, religion, denomination, hometown, region.
-- Uses useAdmissionStore for state updates.
-
-Implementation guidance:
-- Use the same pattern for other multi-step components.
-- Trims and filters empty strings from languages to maintain clean array data.
-- Drop-in replacement for previous StepLanguagesReligion.tsx.
-
-Scalability insight:
-- CSV-to-array handling can be abstracted into a small helper if used in multiple steps.
-- Ensures all inputs consistently update store with normalized, predictable data.
-*/
