@@ -94,7 +94,7 @@ export default function StudentsPage() {
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 mt-7">
       {/* Header + Admission Modal */}
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-bold">Students</h1>

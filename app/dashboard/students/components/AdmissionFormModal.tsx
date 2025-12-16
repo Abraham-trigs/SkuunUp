@@ -23,17 +23,17 @@ export default function AdmissionFormModal() {
 
       <Transition appear show={isOpen} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={closeModal}>
-          {/* Background Overlay */}
+          {/* Background Overlay with blur */}
           <Transition.Child
             as={Fragment}
             enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-30"
+            enterFrom="opacity-0 backdrop-blur-none"
+            enterTo="opacity-30 backdrop-blur-sm"
             leave="ease-in duration-200"
-            leaveFrom="opacity-30"
-            leaveTo="opacity-0"
+            leaveFrom="opacity-30 backdrop-blur-sm"
+            leaveTo="opacity-0 backdrop-blur-none"
           >
-            <div className="fixed inset-0 bg-black" />
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
           </Transition.Child>
 
           {/* Modal panel */}
@@ -66,3 +66,21 @@ export default function AdmissionFormModal() {
     </>
   );
 }
+
+/* ------------------------------------------------------------------------
+Design reasoning:
+- Uses Tailwind backdrop-blur utilities to create a visually appealing blurred background.
+- Maintains modal focus and accessibility while reducing visual strain.
+
+Structure:
+- Transition.Child wraps overlay with opacity and blur animations.
+- Dialog.Panel contains modal content, unchanged from previous logic.
+
+Implementation guidance:
+- Adjust `backdrop-blur-sm` to `backdrop-blur-md` or `backdrop-blur-lg` for stronger effect.
+- Overlay color uses `bg-black/30` to combine opacity with blur.
+
+Scalability insight:
+- Easy to apply same overlay style across other modals for consistent UX.
+- Blur effect is GPU-accelerated and performant on modern browsers.
+------------------------------------------------------------------------ */
