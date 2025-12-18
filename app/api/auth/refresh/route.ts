@@ -7,7 +7,7 @@ import { signJwt } from "@/lib/jwt.ts";
 import { COOKIE_NAME, COOKIE_OPTIONS } from "@/lib/cookies.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   try {
     // Initialize school-scoped account from JWT cookie
     const schoolAccount = await SchoolAccount.init();
@@ -32,3 +32,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to refresh token" }, { status: 500 });
   }
 }
+
