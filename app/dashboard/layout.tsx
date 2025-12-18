@@ -1,3 +1,6 @@
+// app/dashboard/layout.tsx
+// Purpose: Dashboard layout with Sidebar, Topbar, auth guard, and Ark-themed background
+
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
@@ -40,7 +43,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   if (typeof window === "undefined" || !authChecked) return null;
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-gradient-to-br from-ford-primary/20 to-ford-secondary/10 backdrop-blur-md">
+    <div className="h-screen w-screen overflow-hidden flex bg-gradient-to-br from-ark-lightblue/20 to-ark-cyan/10 backdrop-blur-md">
       <Sidebar />
       <div
         className="flex flex-col flex-1 transition-all duration-300"
@@ -54,3 +57,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 }
+
+/*
+Design reasoning:
+- Maintains current auth guard logic, sidebar toggle width, and Topbar layout.
+- Replaced legacy ford-* background gradient with Ark palette (lightblue → cyan) for modern, cohesive theme.
+- Backdrop blur retained for glass-like effect, aligning with modern UI patterns.
+
+Structure:
+- Root flex container for sidebar + main content.
+- Sidebar width dynamically controlled via Zustand store.
+- Topbar and main content flex-1 for responsive resizing.
+
+Implementation guidance:
+- Auth check ensures client-only rendering until user is verified.
+- Margin-left dynamically applied based on sidebar open state.
+- Gradient background applied only here, not forcing color changes elsewhere.
+
+Scalability insight:
+- Ark palette integration ensures consistent theming across dashboard components.
+- Flexible layout accommodates future global providers or overlays without structural changes.
+- Sidebar and Topbar can independently evolve while maintaining responsive main content area.
+*/
