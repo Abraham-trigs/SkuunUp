@@ -19,8 +19,9 @@ import {
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Ford School Management",
-  description: "Single-tenant school management system",
+  title: "SkuunUp - School Management System",
+  description:
+    "Multi-Tenant school management system for all school levels withj Ai.",
 };
 
 interface RootLayoutProps {
@@ -41,10 +42,12 @@ export default function RootLayout({
         <GlobalActionProgress />
 
         {/* Main content with glass-like background */}
-        <AppBackground>{children}</AppBackground>
+        {/* <AppBackground> */}
+        {children}
+        {/* </AppBackground> */}
 
         {/* Footer */}
-        <FooterWrapper />
+        {/* <FooterWrapper /> */}
 
         {/* Scroll helper */}
         <BackToTop />
@@ -58,9 +61,7 @@ export default function RootLayout({
   // Wrap in AuthGuard if required
   return (
     <html lang="en" className="h-full">
-      <body
-        className={`${inter.className} h-full text-neutral-dark overflow-x-hidden`}
-      >
+      <body className={`${inter.className} h-full overflow-x-hidden`}>
         {requireAuth ? <AuthGuard>{content}</AuthGuard> : content}
       </body>
     </html>

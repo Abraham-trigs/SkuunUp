@@ -29,45 +29,47 @@ body {
 }
 
 /* --- Text Colors --- */
-.text-ford-primary { color: var(--ford-primary) !important; }
-.text-ford-secondary { color: var(--ford-secondary) !important; }
-.text-ford-card { color: var(--ford-card) !important; }
-.text-ford-typo { color: var(--typo) !important; }
-.text-neutral-dark { color: var(--neutral-dark) !important; }
-.text-success { color: var(--success) !important; }
-.text-warning { color: var(--warning) !important; }
+/* --- Text Colors --- */
+.text-ark-lightblue { color: var(--color-ark-lightblue) !important; }
+.text-ark-red { color: var(--color-ark-red) !important; }
+.text-ark-deepblue { color: var(--color-ark-deepblue) !important; }
+.text-ark-navy { color: var(--color-ark-navy) !important; }
+.text-ark-cyan { color: var(--color-ark-cyan) !important; }
 
 /* --- Background Colors --- */
-.bg-ford-primary { background-color: var(--ford-primary) !important; }
-.bg-ford-secondary { background-color: var(--ford-secondary) !important; }
-.bg-ford-card { background-color: var(--ford-card) !important; }
-.bg-background { background-color: var(--background) !important; }
-.bg-success { background-color: var(--success) !important; }
-.bg-warning { background-color: var(--warning) !important; }
+.bg-ark-lightblue { background-color: var(--color-ark-lightblue) !important; }
+.bg-ark-red { background-color: var(--color-ark-red) !important; }
+.bg-ark-deepblue { background-color: var(--color-ark-deepblue) !important; }
+.bg-ark-navy { background-color: var(--color-ark-navy) !important; }
+.bg-ark-cyan { background-color: var(--color-ark-cyan) !important; }
 
 /* --- Border Colors --- */
-.border-ford-primary { border-color: var(--ford-primary) !important; }
-.border-ford-secondary { border-color: var(--ford-secondary) !important; }
-.border-ford-card { border-color: var(--ford-card) !important; }
-.border-success { border-color: var(--success) !important; }
-.border-warning { border-color: var(--warning) !important; }
+.border-ark-lightblue { border-color: var(--color-ark-lightblue) !important; }
+.border-ark-red { border-color: var(--color-ark-red) !important; }
+.border-ark-deepblue { border-color: var(--color-ark-deepblue) !important; }
+.border-ark-navy { border-color: var(--color-ark-navy) !important; }
+.border-ark-cyan { border-color: var(--color-ark-cyan) !important; }
 
-/* --- Hover Variants --- */
-.hover\:text-ford-primary:hover { color: var(--ford-primary) !important; }
-.hover\:text-ford-secondary:hover { color: var(--ford-secondary) !important; }
-.hover\:text-ford-card:hover { color: var(--ford-card) !important; }
-.hover\:text-ford-typo:hover { color: var(--typo) !important; }
-.hover\:text-success:hover { color: var(--success) !important; }
-.hover\:text-warning:hover { color: var(--warning) !important; }
+/* --- Hover Text Colors --- */
+.hover\:text-ark-lightblue:hover { color: var(--color-ark-lightblue) !important; }
+.hover\:text-ark-red:hover { color: var(--color-ark-red) !important; }
+.hover\:text-ark-deepblue:hover { color: var(--color-ark-deepblue) !important; }
+.hover\:text-ark-navy:hover { color: var(--color-ark-navy) !important; }
+.hover\:text-ark-cyan:hover { color: var(--color-ark-cyan) !important; }
 
-.hover\:bg-ford-primary:hover { background-color: var(--ford-primary) !important; }
-.hover\:bg-ford-secondary:hover { background-color: var(--ford-secondary) !important; }
-.hover\:bg-ford-card:hover { background-color: var(--ford-card) !important; }
-.hover\:bg-success:hover { background-color: var(--success) !important; }
-.hover\:bg-warning:hover { background-color: var(--warning) !important; }
+/* --- Hover Background Colors --- */
+.hover\:bg-ark-lightblue:hover { background-color: var(--color-ark-lightblue) !important; }
+.hover\:bg-ark-red:hover { background-color: var(--color-ark-red) !important; }
+.hover\:bg-ark-deepblue:hover { background-color: var(--color-ark-deepblue) !important; }
+.hover\:bg-ark-navy:hover { background-color: var(--color-ark-navy) !important; }
+.hover\:bg-ark-cyan:hover { background-color: var(--color-ark-cyan) !important; }
 
-.focus\:border-ford-primary:focus { border-color: var(--ford-primary) !important; }
-.focus\:border-success:focus { border-color: var(--success) !important; }
+/* --- Focus Border Colors --- */
+.focus\:border-ark-lightblue:focus { border-color: var(--color-ark-lightblue) !important; }
+.focus\:border-ark-red:focus { border-color: var(--color-ark-red) !important; }
+.focus\:border-ark-deepblue:focus { border-color: var(--color-ark-deepblue) !important; }
+.focus\:border-ark-navy:focus { border-color: var(--color-ark-navy) !important; }
+.focus\:border-ark-cyan:focus { border-color: var(--color-ark-cyan) !important; }
 
 
 .fade-enter {
