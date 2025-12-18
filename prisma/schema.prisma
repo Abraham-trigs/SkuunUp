@@ -816,16 +816,28 @@ model DecisionRecord {
   context       String
   decision      String
   consequences  String
+
   status        DecisionStatus @default(PROPOSED)
 
   supersedesId  String?
-  supersedes    DecisionRecord? @relation("Supersedes", fields: [supersedesId], references: [id])
-  supersededBy  DecisionRecord[] @relation("Supersedes")
+  supersedes    DecisionRecord? @relation("DecisionSupersedes", fields: [supersedesId], references: [id])
+  supersededBy  DecisionRecord[] @relation("DecisionSupersedes")
 
   authorId      String
+  tenantId      String
+
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   implementedAt DateTime?
 
-  @@index([status])
+  @@index([tenantId, status])
+  @@index([createdAt])
+}
+
+enum DecisionStatus {
+  PROPOSED
+  ACCEPTED
+  IMPLEMENTED
+  SUPERSEDED
 }
 
