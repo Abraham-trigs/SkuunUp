@@ -1,28 +1,29 @@
-// app/api/auth/refresh/route.ts
-// Purpose: Refresh JWT for authenticated user while keeping schoolDomain and role
-// Production-ready: Fully uses SchoolAccount to ensure accurate role/school, avoids redundant queries
-
 import { NextRequest, NextResponse } from "next/server";
 import { signJwt } from "@/lib/jwt.ts";
 import { COOKIE_NAME, COOKIE_OPTIONS } from "@/lib/cookies.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
+import { inferRoleFromPosition } from "@/lib/api/constants/roleInference.ts";
 
 export async function POST(_req: NextRequest) {
   try {
-    // Initialize school-scoped account from JWT cookie
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    // Re-sign JWT using preloaded data
+    // Infer role from staff position if present
+    let role = schoolAccount.role;
+    if (schoolAccount.staffApplication?.position) {
+      role = inferRoleFromPosition(schoolAccount.staffApplication.position);
+    }
+
+    // Sign JWT using authoritative info
     const newToken = signJwt({
       id: schoolAccount.info.id,
-      role: schoolAccount.role,
-      schoolDomain: schoolAccount.school.domain,
+      role,
+      schoolId: schoolAccount.school.id, // align with client store
     });
 
-    // Set refreshed cookie
     const res = NextResponse.json({ message: "Token refreshed" });
     res.cookies.set(COOKIE_NAME, newToken, COOKIE_OPTIONS);
 
@@ -32,4 +33,3 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: "Failed to refresh token" }, { status: 500 });
   }
 }
-

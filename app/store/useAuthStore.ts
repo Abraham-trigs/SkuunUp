@@ -1,5 +1,5 @@
 // app/components/store/useAuthStore.ts
-// Purpose: Client-side auth store aligned with Prisma User model and /api/auth/me contract
+// Purpose: Client-side auth store fully aligned with /api/auth/login + /auth/me contracts
 
 "use client";
 
@@ -55,7 +55,7 @@ interface AuthState {
   fetchUserOnce: () => Promise<boolean>;
   setUser: (user: User | null) => void;
 
-  // UI helpers (derived only)
+  // UI helpers
   getUserFullName: () => string;
   getUserInitials: () => string;
 }
@@ -66,15 +66,9 @@ let initialized = false;
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoggedIn: false,
-  loading: {
-    login: false,
-    logout: false,
-    refresh: false,
-    fetchMe: false,
-  },
+  loading: { login: false, logout: false, refresh: false, fetchMe: false },
   error: null,
 
-  // -------------------- Auth actions --------------------
   login: async (email, password) => {
     set({ loading: { ...get().loading, login: true }, error: null });
     try {
@@ -159,48 +153,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setUser: (user) => set({ user, isLoggedIn: !!user }),
 
-  // -------------------- UI helpers --------------------
   getUserFullName: () => {
     const u = get().user;
     if (!u) return "User";
-    return [u.firstName, u.otherNames, u.surname]
-      .filter(Boolean)
-      .join(" ");
+    return [u.firstName, u.otherNames, u.surname].filter(Boolean).join(" ");
   },
 
   getUserInitials: () => {
     const u = get().user;
     if (!u) return "U";
-    return [u.firstName, u.surname]
-      .map((n) => n?.[0])
-      .filter(Boolean)
-      .join("")
-      .toUpperCase();
+    return [u.firstName, u.surname].map((n) => n?.[0]).filter(Boolean).join("").toUpperCase();
   },
 }));
 
-// -------------------- Example Usage --------------------
-// const { fetchUserOnce, getUserFullName } = useAuthStore();
-// await fetchUserOnce();
-// console.log(getUserFullName());
-
-// -------------------- Design reasoning --------------------
-// The store mirrors Prisma’s User model exactly to avoid semantic drift.
-// All display-friendly values (full name, initials) are derived locally.
-// Auth flow remains resilient via refresh fallback and one-time hydration.
-// No server-derived data is recomputed client-side.
-
-// -------------------- Structure --------------------
-// useAuthStore:
-//   - State: user, isLoggedIn, loading, error
-//   - Actions: login, logout, refresh, fetchMe, fetchUser, fetchUserOnce
-//   - Helpers: getUserFullName, getUserInitials
-
-// -------------------- Implementation guidance --------------------
-// Call fetchUserOnce on app bootstrap (layout or provider).
-// Use helpers in UI; never concatenate names inline in components.
-// Treat user as nullable until fetchUserOnce resolves.
-
-// -------------------- Scalability insight --------------------
-// Additional derived helpers (permissions, flags) can be added without
-// touching API contracts or breaking existing components.
+// -------------------- Notes --------------------
+// Fully syncs with /auth/login and /auth/me endpoints.
+// Includes department as optional field for staff.
+// fetchUserOnce ensures single-time hydration on app bootstrap.
+// UI helpers derive full name and initials without polluting API contract.

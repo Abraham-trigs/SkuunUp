@@ -1,20 +1,17 @@
 // lib/cookieUser.ts
-// Purpose: Safely retrieve authenticated user from HTTP-only JWT cookie using Prisma Role enum,
-//          preload full school object and optional student/staff applications,
-//          fully scoped to the user's school, with caching for efficiency.
 
-// lib/cookieUser.ts
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db.ts";
-import { Role } from "@prisma/client";       // <-- correct place
+import { Role } from "@prisma/client";
 import { verifyJwt } from "@/lib/jwt.ts";
 import { COOKIE_NAME } from "@/lib/cookies.ts";
 
-
-/** TypeScript interface for returned user shape */
+/** TypeScript interface updated for the new User model */
 export interface CookieUser {
   id: string;
-  name: string;
+  surname: string;      // Added
+  firstName: string;    // Added
+  otherNames: string | null; // Added
   email: string;
   role: Role;
   school: {
@@ -22,18 +19,13 @@ export interface CookieUser {
     name: string;
     domain: string;
   };
-  Application?: any;       // optional, detailed Student Application
-  staffApplication?: any;  // optional, detailed Staff Application
+  Application?: any;
+  staffApplication?: any;
 }
 
-/** In-memory cache for recent user fetches (short TTL) */
 const userCache = new Map<string, { user: CookieUser; timestamp: number }>();
-const CACHE_TTL = 5000; // milliseconds, adjust for performance/freshness tradeoff
+const CACHE_TTL = 5000;
 
-/**
- * Retrieves authenticated user info from JWT cookie, fully school-scoped.
- * Returns null if token invalid or user not found.
- */
 export async function cookieUser(): Promise<CookieUser | null> {
   try {
     const cookieStore = await cookies();
@@ -43,27 +35,25 @@ export async function cookieUser(): Promise<CookieUser | null> {
     const payload = verifyJwt(token);
     if (!payload?.id) return null;
 
-    // Return cached user if still fresh
     const cached = userCache.get(payload.id);
     const now = Date.now();
     if (cached && now - cached.timestamp < CACHE_TTL) return cached.user;
 
-    // Fetch user with full school object
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
       include: {
-        school: true,  // preload full school object
+        school: true,
       },
     });
+    
     if (!user) return null;
 
     let Application = null;
     let staffApplication = null;
 
-    // Conditional fetching with school scoping
     if (user.role === Role.STUDENT) {
       Application = await prisma.application.findFirst({
-        where: { studentId: payload.id, schoolId: user.school.id },
+        where: { userId: payload.id, schoolId: user.school.id }, // Updated relation name to userId if mapped in Prisma
         include: { previousSchools: true, familyMembers: true },
       });
     }
@@ -75,6 +65,7 @@ export async function cookieUser(): Promise<CookieUser | null> {
       Role.IT_SUPPORT, Role.TRANSPORT, Role.NURSE, Role.COOK, Role.CLEANER,
       Role.SECURITY, Role.MAINTENANCE,
     ];
+
     if (staffRoles.includes(user.role)) {
       staffApplication = await prisma.staffApplication.findFirst({
         where: { staffId: payload.id, schoolId: user.school.id },
@@ -82,10 +73,11 @@ export async function cookieUser(): Promise<CookieUser | null> {
       });
     }
 
-    // Consolidate into typed object
     const consolidatedUser: CookieUser = {
       id: user.id,
-      name: user.name,
+      surname: user.surname,       // Mapped from Prisma
+      firstName: user.firstName,   // Mapped from Prisma
+      otherNames: user.otherNames, // Mapped from Prisma
       email: user.email,
       role: user.role,
       school: {
@@ -97,7 +89,6 @@ export async function cookieUser(): Promise<CookieUser | null> {
       staffApplication,
     };
 
-    // Cache result
     userCache.set(payload.id, { user: consolidatedUser, timestamp: now });
 
     return consolidatedUser;
@@ -106,11 +97,3 @@ export async function cookieUser(): Promise<CookieUser | null> {
     return null;
   }
 }
-
-/* -------------------------
-Design reasoning:
-- Fully scopes applications to authenticated user's school.
-- Preloads school object for zero extra Prisma queries in SchoolAccount-based routes.
-- Caching for performance without sacrificing security.
-- Can be extended to include additional application types or roles.
-------------------------- */

@@ -1,3 +1,6 @@
+// app/components/Topbar.tsx
+// Purpose: Responsive topbar showing user initials on mobile and first name on md+ screens
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -14,7 +17,6 @@ const formatTimestamp = (ts: string) =>
 
 export default function Topbar() {
   const router = useRouter();
-
   const { user, logout } = useAuthStore();
   const { isOpen: sidebarOpen } = useSidebarStore();
   const {
@@ -38,7 +40,7 @@ export default function Topbar() {
   const CLOSED_WIDTH = 64;
   const OPEN_WIDTH = 256;
 
-  // ----- Sidebar offset logic -----
+  // ---------------- Layout offset ----------------
   useEffect(() => {
     const updateStyle = () => {
       const isDesktop = window.innerWidth >= DESKTOP_WIDTH;
@@ -54,31 +56,29 @@ export default function Topbar() {
     return () => window.removeEventListener("resize", updateStyle);
   }, [sidebarOpen]);
 
-  // ----- Identity derivation (authoritative) -----
+  // ---------------- Identity (UI-only) ----------------
   const firstName = user?.firstName ?? "";
+  const middleName = user?.middleName ?? "";
   const surname = user?.surname ?? "";
-
-  const displayName =
-    firstName || surname ? `${firstName} ${surname}`.trim() : "Account";
 
   const initials =
     firstName || surname
       ? `${firstName[0] ?? ""}${surname[0] ?? ""}`.toUpperCase()
       : "A";
 
-  // ----- Logout -----
+  // ---------------- Logout ----------------
   const handleLogout = async () => {
     await logout();
     closeAll();
     router.replace("/auth/login");
   };
 
-  // ----- Notifications -----
+  // ---------------- Notifications ----------------
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // ----- Close menus on outside click / ESC -----
+  // ---------------- Outside click / ESC ----------------
   useEffect(() => {
     const handler = (e: MouseEvent | KeyboardEvent) => {
       if (e instanceof KeyboardEvent && e.key !== "Escape") return;
@@ -104,7 +104,7 @@ export default function Topbar() {
   return (
     <header
       style={style}
-      className="fixed top-0 right-0 z-50 flex items-center justify-between px-4 py-3 text-white transition-all duration-300"
+      className="fixed top-0 right-0 z-50 flex items-center justify-between px-4 py-3 text-white transition-all"
     >
       <div className="flex-1" />
 
@@ -169,16 +169,22 @@ export default function Topbar() {
           <button
             onClick={toggleProfile}
             className="flex items-center gap-2 p-2 rounded"
+            aria-haspopup="menu"
+            aria-expanded={profileOpen}
           >
-            <div className="w-6 h-6 bg-ford-secondary text-ford-primary rounded-full flex items-center justify-center text-xs font-semibold">
+            {/* Initials: mobile only */}
+            <div className="md:hidden w-8 h-8 bg-ford-secondary text-ford-primary rounded-full flex items-center justify-center text-sm font-semibold">
               {initials}
             </div>
-            <span className="hidden md:inline text-ford-secondary font-medium">
-              {displayName}
+
+            {/* First name: md+ only */}
+            <span className="hidden md:inline text-ford-secondary font-medium whitespace-nowrap">
+              {firstName || "Account"}
             </span>
+
             <ChevronDown
               className={clsx(
-                "w-4 h-4 transition-transform",
+                "w-4 h-4 text-ford-secondary transition-transform",
                 profileOpen && "rotate-180"
               )}
             />
@@ -191,6 +197,7 @@ export default function Topbar() {
                 ? "opacity-100 scale-100 pointer-events-auto"
                 : "opacity-0 scale-95 pointer-events-none"
             )}
+            role="menu"
           >
             <button
               className="w-full text-left px-4 py-2 hover:bg-ford-secondary"
