@@ -1,8 +1,12 @@
+// app/components/store/useAuthStore.ts
+// Purpose: Client-side auth store aligned with Prisma User model and /api/auth/me contract
+
 "use client";
 
 import { create } from "zustand";
 import api from "@/lib/axios.ts";
 
+// -------------------- Types --------------------
 export interface School {
   id: string;
   name: string;
@@ -11,11 +15,20 @@ export interface School {
 
 export interface User {
   id: string;
-  name: string;
+
+  // Prisma-aligned personal info
+  surname: string;
+  firstName: string;
+  otherNames?: string | null;
+
   email: string;
   role: string;
-  department?: string;
+
+  schoolId: string;
   school: School;
+
+  // Derived (server-inferred)
+  department?: string | null;
 }
 
 interface AuthError {
@@ -41,11 +54,15 @@ interface AuthState {
   fetchUser: () => Promise<boolean>;
   fetchUserOnce: () => Promise<boolean>;
   setUser: (user: User | null) => void;
+
+  // UI helpers (derived only)
+  getUserFullName: () => string;
+  getUserInitials: () => string;
 }
 
-// ------------------ SINGLETON FLAG ------------------
 let initialized = false;
 
+// -------------------- Store --------------------
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoggedIn: false,
@@ -57,11 +74,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   error: null,
 
+  // -------------------- Auth actions --------------------
   login: async (email, password) => {
     set({ loading: { ...get().loading, login: true }, error: null });
     try {
       const res = await api.post("/auth/login", { email, password });
-      if (res.status === 200) {
+      if (res.status === 200 && res.data.user) {
         set({ user: res.data.user, isLoggedIn: true });
         return true;
       }
@@ -69,7 +87,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     } catch (err: any) {
       set({
-        error: { type: "login", message: err?.response?.data?.error || "Login failed" },
+        error: {
+          type: "login",
+          message: err?.response?.data?.error || "Login failed",
+        },
       });
       return false;
     } finally {
@@ -82,7 +103,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await api.post("/auth/logout");
       set({ user: null, isLoggedIn: false });
-    } catch (err) {
+    } catch {
       set({ error: { type: "logout", message: "Logout failed" } });
     } finally {
       set({ loading: { ...get().loading, logout: false } });
@@ -106,7 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: { ...get().loading, fetchMe: true }, error: null });
     try {
       const res = await api.get("/auth/me");
-      if (res.status === 200) {
+      if (res.status === 200 && res.data.user) {
         set({ user: res.data.user, isLoggedIn: true });
         return true;
       }
@@ -121,8 +142,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   fetchUser: async () => {
-    const me = await get().fetchMe();
-    if (!me) {
+    const ok = await get().fetchMe();
+    if (!ok) {
       const refreshed = await get().refresh();
       if (refreshed) return await get().fetchMe();
       return false;
@@ -130,7 +151,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return true;
   },
 
-  // ------------------ NEW: fetch only once ------------------
   fetchUserOnce: async () => {
     if (initialized) return !!get().user;
     initialized = true;
@@ -138,4 +158,49 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   setUser: (user) => set({ user, isLoggedIn: !!user }),
+
+  // -------------------- UI helpers --------------------
+  getUserFullName: () => {
+    const u = get().user;
+    if (!u) return "User";
+    return [u.firstName, u.otherNames, u.surname]
+      .filter(Boolean)
+      .join(" ");
+  },
+
+  getUserInitials: () => {
+    const u = get().user;
+    if (!u) return "U";
+    return [u.firstName, u.surname]
+      .map((n) => n?.[0])
+      .filter(Boolean)
+      .join("")
+      .toUpperCase();
+  },
 }));
+
+// -------------------- Example Usage --------------------
+// const { fetchUserOnce, getUserFullName } = useAuthStore();
+// await fetchUserOnce();
+// console.log(getUserFullName());
+
+// -------------------- Design reasoning --------------------
+// The store mirrors Prisma’s User model exactly to avoid semantic drift.
+// All display-friendly values (full name, initials) are derived locally.
+// Auth flow remains resilient via refresh fallback and one-time hydration.
+// No server-derived data is recomputed client-side.
+
+// -------------------- Structure --------------------
+// useAuthStore:
+//   - State: user, isLoggedIn, loading, error
+//   - Actions: login, logout, refresh, fetchMe, fetchUser, fetchUserOnce
+//   - Helpers: getUserFullName, getUserInitials
+
+// -------------------- Implementation guidance --------------------
+// Call fetchUserOnce on app bootstrap (layout or provider).
+// Use helpers in UI; never concatenate names inline in components.
+// Treat user as nullable until fetchUserOnce resolves.
+
+// -------------------- Scalability insight --------------------
+// Additional derived helpers (permissions, flags) can be added without
+// touching API contracts or breaking existing components.

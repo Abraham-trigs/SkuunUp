@@ -6,7 +6,7 @@
 import { useEffect, ReactNode } from "react";
 import { useUserStore } from "@/app/store/useUserStore.ts";
 import { useSidebarStore } from "@/app/store/useSidebarStore.ts";
-import { useTopbarStore } from "@/app/store/useTopbarStore.ts";
+import { useTopbarStore } from "@/app/dashboard/components/store/useTopbarStore.ts";
 
 interface ProvidersProps {
   user: {
