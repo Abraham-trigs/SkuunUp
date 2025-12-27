@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useClassesStore } from "@/app/store/useClassesStore.ts";
+import clsx from "clsx";
 
 interface DeleteClassModalProps {
   id: string;
@@ -16,14 +17,13 @@ export default function DeleteClassModal({
   onClose,
   onSuccess,
 }: DeleteClassModalProps) {
-  const { deleteClass, classes, clearSelectedClass } = useClassesStore();
+  const { deleteClass, clearSelectedClass } = useClassesStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const firstButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Reset error and focus first button when modal opens
   useEffect(() => {
     if (isOpen) {
       setError(null);
@@ -31,7 +31,6 @@ export default function DeleteClassModal({
     }
   }, [isOpen]);
 
-  // Handle Escape key to close modal
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -45,23 +44,17 @@ export default function DeleteClassModal({
     setError(null);
 
     try {
-      // Delete class via store
       await deleteClass(id);
-
-      // Optimistically update classes array in store
       useClassesStore.setState((state) => ({
         classes: state.classes.filter((cls) => cls.id !== id),
         selectedClass:
           state.selectedClass?.id === id ? null : state.selectedClass,
       }));
 
-      // Clear any selected class if it was deleted
       clearSelectedClass();
-
-      onSuccess?.(); // parent can refresh table or pagination
-      onClose(); // close modal
+      onSuccess?.();
+      onClose();
     } catch (err: any) {
-      console.error("Delete failed:", err.message || err);
       setError("An unexpected error occurred.");
     } finally {
       setLoading(false);
@@ -74,35 +67,53 @@ export default function DeleteClassModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
     >
       <div
         ref={modalRef}
-        className="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 animate-fade-in focus:outline-none"
+        style={{ backgroundColor: "#03102b", borderColor: "#1c376e" }}
+        className="border rounded-xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200"
       >
-        <h2 className="text-lg font-semibold mb-4">Confirm Delete</h2>
-        <p className="mb-6 text-gray-700">
-          Are you sure you want to delete this class? This action cannot be
-          undone.
+        <h2 style={{ color: "#BFCDEF" }} className="text-lg font-bold mb-3">
+          Confirm Deletion
+        </h2>
+        <p
+          style={{ color: "#BFCDEF" }}
+          className="mb-6 opacity-80 leading-relaxed"
+        >
+          Are you sure you want to delete this class? This action is permanent
+          and cannot be undone.
         </p>
 
-        {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+        {error && (
+          <p
+            style={{ backgroundColor: "#E74C3C20", color: "#E74C3C" }}
+            className="text-sm p-3 rounded-lg mb-4 border border-[#E74C3C40]"
+          >
+            {error}
+          </p>
+        )}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-3">
           <button
             ref={firstButtonRef}
             onClick={onClose}
-            className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+            style={{ color: "#BFCDEF" }}
+            className="px-4 py-2 rounded-lg hover:bg-white/5 transition-colors font-medium"
             disabled={loading}
           >
             Cancel
           </button>
           <button
             onClick={handleDelete}
-            className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+            style={{ backgroundColor: "#E74C3C" }}
+            className={clsx(
+              "px-5 py-2 rounded-lg text-white font-bold transition-all active:scale-95 shadow-lg shadow-[#E74C3C]/20",
+              loading ? "opacity-50 cursor-not-allowed" : "hover:brightness-110"
+            )}
             disabled={loading}
           >
-            {loading ? "Deleting..." : "Delete"}
+            {loading ? "Deleting..." : "Delete Class"}
           </button>
         </div>
       </div>

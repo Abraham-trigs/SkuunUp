@@ -49,7 +49,7 @@ export default function AppBackground({
         className="absolute inset-0"
       >
         <Image
-          src="/background-1920x2880.webp"
+          src="/appBackground.webp"
           alt="App Background"
           fill
           className="object-cover object-center"

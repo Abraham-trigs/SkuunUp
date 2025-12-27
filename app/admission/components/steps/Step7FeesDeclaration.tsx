@@ -7,13 +7,19 @@ import React, { useEffect, useState } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import { useClassesStore } from "@/app/store/useClassesStore.ts";
 import LabeledInput from "./LabeledInput.tsx";
+import { Class } from "@prisma/client";
+
+// Extend Class type to include grades
+interface ClassWithGrades extends Class {
+  grades: { id: string; name: string; capacity: number; enrolled: number }[];
+}
 
 export default function StepFeesDeclaration() {
   const { formData, setField, setClass, selectGrade } = useAdmissionStore();
   const { classes, fetchClasses } = useClassesStore();
 
   const [gradesForClass, setGradesForClass] = useState<
-    { id: string; name: string; capacity: number; enrolled: number }[]
+    ClassWithGrades["grades"]
   >([]);
 
   // Fetch classes on mount if not already loaded
@@ -27,13 +33,15 @@ export default function StepFeesDeclaration() {
       setGradesForClass([]);
       return;
     }
-    const selectedClass = classes.find((c) => c.id === formData.classId);
+    const selectedClass = classes.find(
+      (c) => c.id === formData.classId
+    ) as ClassWithGrades;
     setGradesForClass(selectedClass?.grades || []);
   }, [formData.classId, classes]);
 
   const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const classId = e.target.value;
-    setClass(classId, undefined); // store will pick first available grade if not provided
+    setClass(classId, []); // pass empty array instead of undefined
   };
 
   const handleGradeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -111,25 +119,3 @@ export default function StepFeesDeclaration() {
     </div>
   );
 }
-
-/*
-Design reasoning:
-- Replaces raw ID text inputs with proper dropdowns for Class and Grade.
-- Uses store helpers `setClass` and `selectGrade` to automatically update formData and className/gradeName.
-- Grade dropdown is dynamic, filtered by selected class and respects capacity.
-
-Structure:
-- Two checkboxes for feesAcknowledged and declarationSigned.
-- Signature text input.
-- Class dropdown followed by Grade dropdown dependent on selected class.
-
-Implementation guidance:
-- Ensure `fetchClasses()` has been called before rendering the dropdown to avoid empty options.
-- Disabled grade dropdown when no class is selected or class has no grades.
-- Uses `useEffect` to sync grades with selected class.
-
-Scalability insight:
-- Supports dynamic class/grade lists from API.
-- Automatically selects first available grade when class changes.
-- Dropdowns are reusable patterns for other steps needing class/grade selection.
-*/

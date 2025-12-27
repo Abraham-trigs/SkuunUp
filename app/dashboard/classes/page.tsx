@@ -132,28 +132,87 @@ export default function ClassesPage() {
     ));
 
   return (
-    <div className="p-6 space-y-6 mt-7">
+    <div className="p-6 space-y-6 mt-7 ml-5 mr-20">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-        <h1 className="text-2xl font-bold">Classes</h1>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Search classes..."
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            className="px-3 py-2 border rounded-md focus:outline-none focus:ring focus:ring-ford-primary"
-          />
-          <button
-            onClick={() => setSearch(localSearch)}
-            className="px-4 py-2 rounded bg-ford-primary text-white hover:bg-ford-secondary"
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-2">
+        {/* Left Side: Title & Context */}
+        <div className="space-y-1">
+          <h1
+            style={{ color: "#BFCDEF" }}
+            className="text-3xl font-black tracking-tight sm:text-4xl"
           >
-            Search
-          </button>
+            CLASSES
+          </h1>
+          <div className="flex items-center gap-2">
+            <span
+              className="h-1 w-8 rounded-full"
+              style={{ backgroundColor: "#6BE8EF" }}
+            />
+            <p
+              style={{ color: "#BFCDEF" }}
+              className="text-xs uppercase tracking-[0.2em] opacity-60 font-bold"
+            >
+              Academic Management
+            </p>
+          </div>
+        </div>
+
+        {/* Right Side: Search & Actions */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+          {/* Sleek Search Input */}
+          <div className="relative w-full sm:w-72 group">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg
+                className="h-4 w-4 transition-colors group-focus-within:text-[#6BE8EF]"
+                style={{ color: "#BFCDEF", opacity: 0.5 }}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Search directory..."
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              style={{
+                backgroundColor: "#1c376e",
+                borderColor: "#BFCDEF33",
+                color: "#BFCDEF",
+              }}
+              className="block w-full pl-10 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#6BE8EF] focus:border-transparent transition-all placeholder:text-[#BFCDEF]/30 text-sm"
+            />
+          </div>
+
+          {/* Primary Action Button */}
           <button
             onClick={() => setAddOpen(true)}
-            className="px-4 py-2 rounded bg-ford-primary text-white hover:bg-ford-secondary"
+            style={{
+              backgroundColor: "#6BE8EF",
+              color: "#03102b",
+            }}
+            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-2.5 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-[1.03] active:scale-95 transition-all shadow-lg shadow-[#6BE8EF]/20"
           >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
             Add Class
           </button>
         </div>
@@ -161,57 +220,128 @@ export default function ClassesPage() {
 
       {/* Table */}
       {loading ? (
-        <p>Loading classes...</p>
+        <div className="flex flex-col items-center justify-center p-20 space-y-4">
+          <div className="w-8 h-8 border-4 border-[#6BE8EF] border-t-transparent rounded-full animate-spin" />
+          <p
+            style={{ color: "#BFCDEF" }}
+            className="text-sm font-medium animate-pulse"
+          >
+            Synchronizing academic data...
+          </p>
+        </div>
       ) : (
-        <>
-          <table className="w-full table-auto border-collapse">
-            <thead>
-              <tr className="bg-ford-primary text-white">
-                <th
-                  className="px-4 py-2 cursor-pointer"
-                  onClick={() => toggleSort("name")}
-                >
-                  Name{" "}
-                  {sortBy === "name" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
-                </th>
-                <th
-                  className="px-4 py-2 cursor-pointer"
-                  onClick={() => toggleSort("studentCount")}
-                >
-                  Students{" "}
-                  {sortBy === "studentCount"
-                    ? sortOrder === "asc"
-                      ? "↑"
-                      : "↓"
-                    : ""}
-                </th>
-                <th className="px-4 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>{renderRows()}</tbody>
-          </table>
-
-          {/* Pagination */}
-          <div className="flex justify-end gap-2 mt-2">
-            <button
-              disabled={page === 1}
-              onClick={() => fetchClasses(page - 1)}
-              className="px-3 py-1 rounded border disabled:opacity-50"
-            >
-              Prev
-            </button>
-            <span className="px-2 py-1">
-              {page} / {totalPages}
-            </span>
-            <button
-              disabled={page === totalPages || totalPages === 0}
-              onClick={() => fetchClasses(page + 1)}
-              className="px-3 py-1 rounded border disabled:opacity-50"
-            >
-              Next
-            </button>
+        <div className="space-y-4">
+          {/* Sleek Table Container */}
+          <div
+            style={{ backgroundColor: "#03102b", borderColor: "#1c376e" }}
+            className="border rounded-2xl overflow-hidden shadow-2xl transition-all"
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr style={{ backgroundColor: "#1c376e" }}>
+                    <th
+                      className="px-6 py-4 cursor-pointer group"
+                      onClick={() => toggleSort("name")}
+                    >
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#BFCDEF]">
+                        Class Name
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[#6BE8EF]">
+                          {sortBy === "name"
+                            ? sortOrder === "asc"
+                              ? "↑"
+                              : "↓"
+                            : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      className="px-6 py-4 cursor-pointer group"
+                      onClick={() => toggleSort("studentCount")}
+                    >
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#BFCDEF]">
+                        Students
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[#6BE8EF]">
+                          {sortBy === "studentCount"
+                            ? sortOrder === "asc"
+                              ? "↑"
+                              : "↓"
+                            : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-black uppercase tracking-widest text-[#BFCDEF]">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {renderRows()}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </>
+
+          {/* Modern Pagination Bar */}
+          <div className="flex items-center justify-between px-2">
+            <p
+              style={{ color: "#BFCDEF" }}
+              className="text-xs font-medium opacity-50"
+            >
+              Showing {classes.length} of {total} results
+            </p>
+
+            <div className="flex items-center gap-1 bg-[#1c376e]/50 p-1 rounded-xl border border-[#BFCDEF]/10">
+              <button
+                disabled={page === 1}
+                onClick={() => fetchClasses(page - 1)}
+                className="p-2 rounded-lg hover:bg-[#6BE8EF] hover:text-[#03102b] disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-inherit transition-all"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+              </button>
+
+              <div
+                style={{ backgroundColor: "#03102b", color: "#6BE8EF" }}
+                className="px-4 py-1.5 rounded-lg text-sm font-bold border border-[#6BE8EF]/20"
+              >
+                {page} <span className="opacity-40 px-1 text-white">/</span>{" "}
+                {totalPages}
+              </div>
+
+              <button
+                disabled={page === totalPages || totalPages === 0}
+                onClick={() => fetchClasses(page + 1)}
+                className="p-2 rounded-lg hover:bg-[#6BE8EF] hover:text-[#03102b] disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-inherit transition-all"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modals */}
@@ -258,7 +388,7 @@ export default function ClassesPage() {
       )}
 
       {/* Chart */}
-      <StudentsPerClassChart
+      {/* <StudentsPerClassChart
         data={classes.map((c) => ({
           id: c.id,
           className: c.name,
@@ -270,7 +400,7 @@ export default function ClassesPage() {
           setStudentsOpen(true);
           await fetchClassById(cls.id);
         }}
-      />
+      /> */}
     </div>
   );
 }

@@ -2,13 +2,13 @@
 // Purpose: Dashboard layout with Sidebar, Topbar, auth guard, and Ark-themed background
 
 "use client";
-
+import { useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import Sidebar from "@/app/dashboard/components/Sidebar.tsx";
 import Topbar from "@/app/dashboard/components/Topbar.tsx";
 import { useSidebarStore } from "@/app/dashboard/components/store/sideBarStore.ts";
 import { useAuthStore } from "@/app/store/useAuthStore.ts";
-import { useRouter } from "next/navigation";
+import AppBackground from "../components/AppBackground.tsx";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -16,7 +16,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { isOpen } = useSidebarStore();
-  const sidebarWidth = isOpen ? 256 : 64;
+  const sidebarWidth = isOpen ? 256 : 34;
 
   const { fetchUserOnce } = useAuthStore();
   const router = useRouter();
@@ -43,7 +43,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   if (typeof window === "undefined" || !authChecked) return null;
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-ark-navy backdrop-blur-md">
+    <div className="h-full w-full overflow-hidden flex bg-ark-navy backdrop-blur-md">
       <Sidebar />
       <div
         className="flex flex-col flex-1 transition-all duration-300"
@@ -51,7 +51,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       >
         <Topbar />
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 mt-1">
-          {children}
+          <AppBackground>{children}</AppBackground>
         </main>
       </div>
     </div>

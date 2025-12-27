@@ -94,8 +94,8 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <div className="space-y-6 ">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-12 ">
+    <div className="max-full space-y-6 ml-8 mr-20 ">
+      <div className=" grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-12 ">
         {summary.map((card) => (
           <SummaryCard
             key={card.title}

@@ -14,12 +14,12 @@ import AuthGuard from "@/app/components/AuthGuard.tsx";
 import {
   AsyncActionQueueProvider,
   GlobalActionProgress,
-} from "@/context/AsyncActionQueueProvider";
+} from "@/context/AsyncActionQueueProvider.tsx";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "SkuunUp - School Management System",
+  title: "SkuunUp",
   description:
     "Multi-Tenant school management system for all school levels withj Ai.",
 };

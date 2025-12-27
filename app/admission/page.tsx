@@ -1,6 +1,4 @@
-// app/admissions/page.tsx
-// Purpose: Admission page with dynamic step renderer wrapped in optimized AuthGuard
-
+// app/admission/page.tsx
 "use client";
 
 import dynamic from "next/dynamic";
@@ -15,54 +13,66 @@ const MultiStepAdmissionForm = dynamic(
 export default function AdmissionPage() {
   return (
     <AuthGuard redirectOnFail>
-      <main className="min-h-screen py-10">
-        <div className="max-w-5xl mx-auto px-4">
-          <h1 className="text-3xl font-bold mb-8 text-center">
-            Student Admission
-          </h1>
-          <section className="bg-white shadow rounded-lg p-6">
-            <MultiStepAdmissionForm />
+      <main
+        style={{ backgroundColor: "#03102b" }}
+        className="min-h-screen py-12 lg:py-20 px-4 transition-colors duration-500"
+      >
+        <div className="max-w-5xl mx-auto">
+          {/* Branded Header Section */}
+          <header className="mb-12 text-center space-y-3">
+            <h1
+              style={{ color: "#BFCDEF" }}
+              className="text-4xl lg:text-5xl font-black tracking-tighter uppercase"
+            >
+              Student Admission
+            </h1>
+            <div className="flex items-center justify-center gap-3">
+              <div
+                className="h-1 w-12 rounded-full"
+                style={{ backgroundColor: "#6BE8EF" }}
+              />
+              <p
+                style={{ color: "#BFCDEF" }}
+                className="text-xs font-bold uppercase tracking-[0.3em] opacity-60"
+              >
+                Enrollment Portal 2025
+              </p>
+              <div
+                className="h-1 w-12 rounded-full"
+                style={{ backgroundColor: "#6BE8EF" }}
+              />
+            </div>
+          </header>
+
+          {/* Glass-Card Form Container */}
+          <section
+            style={{
+              backgroundColor: "#03102b",
+              borderColor: "#1c376e",
+              boxShadow: "0 25px 50px -12px rgba(107, 232, 239, 0.05)",
+            }}
+            className="relative border rounded-3xl p-6 md:p-10 lg:p-12 overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-[#6BE8EF]/10"
+          >
+            {/* Decorative Background Glow */}
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#6BE8EF]/5 blur-[100px] rounded-full pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-[#E74C3C]/5 blur-[100px] rounded-full pointer-events-none" />
+
+            <div className="relative z-10">
+              <MultiStepAdmissionForm />
+            </div>
           </section>
+
+          {/* Footer Utility */}
+          <footer className="mt-8 text-center">
+            <p
+              style={{ color: "#BFCDEF" }}
+              className="text-[10px] uppercase tracking-widest opacity-40"
+            >
+              Secured Academic Infrastructure • Powered by Ark Intelligence
+            </p>
+          </footer>
         </div>
       </main>
     </AuthGuard>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/* Design reasoning                                                           */
-/* -------------------------------------------------------------------------- */
-/*
-- Uses optimized AuthGuard to fetch user only once if not already in store.
-- Dynamic import ensures MultiStepAdmissionForm is rendered client-side only.
-- Prevents constant "Checking authentication..." spinner during navigation.
-- Clean, centered layout for readability and visual hierarchy.
-*/
-
-/* -------------------------------------------------------------------------- */
-/* Structure                                                                  */
-/* -------------------------------------------------------------------------- */
-/*
-- AuthGuard -> protects the page
-- Container -> max-width, padding
-- Header -> centered page title
-- Form section -> visually isolated card with shadow and padding
-*/
-
-/* -------------------------------------------------------------------------- */
-/* Implementation guidance                                                    */
-/* -------------------------------------------------------------------------- */
-/*
-- Wrap any future client-only components in dynamic imports if SSR issues arise.
-- AuthGuard ensures that only authenticated users can access this page.
-- Page will no longer flicker during modal interactions or dashboard navigation.
-*/
-
-/* -------------------------------------------------------------------------- */
-/* Scalability insight                                                        */
-/* -------------------------------------------------------------------------- */
-/*
-- Supports dynamic step updates without changes to the page.
-- Future modals, notifications, or breadcrumbs can be nested safely.
-- Smooth user experience across dashboard and standalone pages.
-*/

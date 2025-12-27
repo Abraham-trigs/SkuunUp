@@ -26,7 +26,6 @@ export default function EditClassModal({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // Sync input with selected class when modal opens
   useEffect(() => {
     if (isOpen && selectedClass) {
       setName(selectedClass.name);
@@ -34,7 +33,6 @@ export default function EditClassModal({
     }
   }, [isOpen, selectedClass]);
 
-  // Cleanup state when modal closes
   useEffect(() => {
     if (!isOpen) {
       setName("");
@@ -64,9 +62,7 @@ export default function EditClassModal({
       const result = await updateClass(selectedClass.id, trimmedName);
 
       if (result?.success && result.data) {
-        // Immediately update store to reflect changes
         setClassData(result.data);
-
         onSuccess?.();
         onClose();
       } else {
@@ -84,16 +80,22 @@ export default function EditClassModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-        <h2 className="mb-4 text-xl font-semibold">Edit Class</h2>
+      <div
+        style={{ backgroundColor: "#03102b", borderColor: "#1c376e" }}
+        className="w-full max-w-md rounded-xl border p-6 shadow-2xl animate-in fade-in zoom-in duration-200"
+      >
+        <h2 style={{ color: "#BFCDEF" }} className="mb-4 text-xl font-bold">
+          Edit Class
+        </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
               htmlFor="class-name"
-              className="mb-1 block text-sm font-medium"
+              style={{ color: "#BFCDEF" }}
+              className="mb-1 block text-sm font-medium opacity-90"
             >
               Class name
             </label>
@@ -104,23 +106,33 @@ export default function EditClassModal({
               onChange={(e) => setName(e.target.value)}
               autoFocus
               disabled={loading}
-              className="w-full rounded border px-3 py-2 focus:outline-ford-primary disabled:bg-gray-100"
+              style={{
+                backgroundColor: "#1c376e",
+                color: "#6BE8EF",
+                borderColor: "#BFCDEF33",
+              }}
+              className="w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#6BE8EF] disabled:opacity-50 transition-all placeholder:text-white/20"
               placeholder="e.g. Grade 6"
             />
           </div>
 
           {error && (
-            <p role="alert" className="text-sm text-red-600">
+            <p
+              role="alert"
+              style={{ color: "#E74C3C" }}
+              className="text-sm font-medium bg-[#E74C3C]/10 p-2 rounded border border-[#E74C3C]/20"
+            >
               {error}
             </p>
           )}
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="rounded bg-gray-200 px-4 py-2 hover:bg-gray-300 disabled:opacity-50"
+              style={{ color: "#BFCDEF" }}
+              className="rounded-lg px-4 py-2 hover:bg-white/5 disabled:opacity-50 transition-colors font-medium"
             >
               Cancel
             </button>
@@ -128,12 +140,18 @@ export default function EditClassModal({
             <button
               type="submit"
               disabled={loading}
+              style={{
+                backgroundColor: loading ? "#1c376e" : "#6BE8EF",
+                color: "#03102b",
+              }}
               className={clsx(
-                "rounded bg-ford-primary px-4 py-2 text-white hover:bg-ford-secondary",
-                loading && "cursor-not-allowed opacity-50"
+                "rounded-lg px-6 py-2 font-bold transition-all active:scale-95 shadow-lg shadow-[#6BE8EF]/10",
+                loading
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:brightness-110"
               )}
             >
-              {loading ? "Updating…" : "Update"}
+              {loading ? "Updating…" : "Update Class"}
             </button>
           </div>
         </form>

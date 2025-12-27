@@ -61,45 +61,75 @@ export default function AddClassModal({ isOpen, onClose }: AddClassModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
-        <h2 className="text-xl font-semibold mb-4">Add Class</h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div
+        style={{ backgroundColor: "#03102b", borderColor: "#1c376e" }}
+        className="border rounded-xl shadow-2xl w-full max-w-md p-6 overflow-hidden"
+      >
+        <h2 style={{ color: "#BFCDEF" }} className="text-xl font-bold mb-4">
+          Add Class
+        </h2>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Class Name</label>
+            <label
+              style={{ color: "#BFCDEF" }}
+              className="block text-sm font-medium mb-1"
+            >
+              Class Name
+            </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-ford-primary"
-              placeholder="Enter class name"
+              style={{
+                backgroundColor: "#1c376e",
+                color: "#6BE8EF",
+                borderColor: "#BFCDEF/20",
+              }}
+              className="w-full border px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6BE8EF] placeholder:text-white/20"
+              placeholder="e.g. Senior Year"
               required
               autoFocus
             />
-            <p className="text-gray-500 text-sm mt-1">
+            <p style={{ color: "#BFCDEF" }} className="opacity-60 text-xs mt-2">
               Grades "A", "B", and "C" will be created automatically.
             </p>
           </div>
 
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && (
+            <p
+              style={{ color: "#E74C3C" }}
+              className="text-sm font-medium bg-[#E74C3C]/10 p-2 rounded"
+            >
+              {error}
+            </p>
+          )}
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+              style={{ color: "#BFCDEF" }}
+              className="px-4 py-2 rounded-lg hover:bg-white/5 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
+              style={{
+                backgroundColor: loading ? "#1c376e" : "#6BE8EF",
+                color: "#03102b",
+              }}
               className={clsx(
-                "px-4 py-2 rounded bg-ford-primary text-white hover:bg-ford-secondary",
-                loading && "opacity-50 cursor-not-allowed"
+                "px-6 py-2 rounded-lg font-bold transition-all active:scale-95",
+                loading
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:brightness-110 shadow-lg shadow-[#6BE8EF]/20"
               )}
             >
-              {loading ? "Saving..." : "Save"}
+              {loading ? "Saving..." : "Create Class"}
             </button>
           </div>
         </form>

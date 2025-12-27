@@ -27,6 +27,9 @@ export type GradeOption = {
 };
 
 export const admissionFormSchema = z.object({
+
+  schoolDomain: z.string().optional().default(""),
+
   applicationId: z.string().optional(),
   studentId: z.string().optional(),
   progress: z.number().default(0),

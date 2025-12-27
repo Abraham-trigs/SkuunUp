@@ -7,12 +7,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum DecisionStatus {
-  PROPOSED
-  IMPLEMENTED
-  SUPERSEDED
-}
-
 enum Role {
   ADMIN
   MODERATOR
@@ -107,6 +101,7 @@ model Student {
   id       String @id @default(cuid())
   userId   String @unique
   user     User   @relation(fields: [userId], references: [id])
+  name      String?
   schoolId String
   school   School @relation(fields: [schoolId], references: [id])
 
@@ -441,6 +436,7 @@ model StudentAttendance {
   id        String           @id @default(cuid())
   studentId String
   student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId   String
   date      DateTime         @default(now())
   status    AttendanceStatus
   timeIn    DateTime?
@@ -809,25 +805,24 @@ model SkuunAiRecommendation {
   updatedAt DateTime       @updatedAt
 }
 
-
 model DecisionRecord {
-  id            String   @id @default(cuid())
-  title         String
-  context       String
-  decision      String
-  consequences  String
+  id           String @id @default(cuid())
+  title        String
+  context      String
+  decision     String
+  consequences String
 
-  status        DecisionStatus @default(PROPOSED)
+  status DecisionStatus @default(PROPOSED)
 
-  supersedesId  String?
-  supersedes    DecisionRecord? @relation("DecisionSupersedes", fields: [supersedesId], references: [id])
-  supersededBy  DecisionRecord[] @relation("DecisionSupersedes")
+  supersedesId String?
+  supersedes   DecisionRecord?  @relation("DecisionSupersedes", fields: [supersedesId], references: [id])
+  supersededBy DecisionRecord[] @relation("DecisionSupersedes")
 
-  authorId      String
-  tenantId      String
+  authorId String
+  tenantId String
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   implementedAt DateTime?
 
   @@index([tenantId, status])
@@ -840,4 +835,3 @@ enum DecisionStatus {
   IMPLEMENTED
   SUPERSEDED
 }
-

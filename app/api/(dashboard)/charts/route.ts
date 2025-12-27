@@ -1,4 +1,4 @@
-// app/api/charts/route.ts
+// app/api/(dashboard)/charts/route.ts
 // Provides class student counts and recent attendance trends
 
 import { NextResponse } from "next/server";
@@ -36,14 +36,23 @@ export async function GET() {
       _count: { id: true },
     });
 
-    // Build trend per class
+    // Preprocess attendances into a map for O(1) lookup
+    const attendanceMap: Record<string, Record<string, number>> = {};
+    attendances.forEach((a) => {
+      const classId = a.classId;
+      const dateStr = formatDate(a.date);
+      if (!attendanceMap[classId]) attendanceMap[classId] = {};
+      attendanceMap[classId][dateStr] = a._count.id; // extract count
+    });
+
+    // Build trend per class with zero-filling
     const attendanceTrend = studentsPerClass.map((c) => {
       const trendData = Array.from({ length: 30 }).map((_, i) => {
         const date = formatDate(new Date(thirtyDaysAgo.getTime() + i * 24 * 60 * 60 * 1000));
-        const countRecord = attendances.find(
-          (a) => a.classId === c.id && formatDate(a.date) === date
-        );
-        return { date, presentCount: countRecord?._count ?? 0 };
+        return {
+          date,
+          presentCount: attendanceMap[c.id]?.[date] ?? 0,
+        };
       });
       return { className: c.name, data: trendData };
     });

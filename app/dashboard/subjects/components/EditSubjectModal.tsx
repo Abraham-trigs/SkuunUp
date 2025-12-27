@@ -1,11 +1,11 @@
-// app/components/subjects/EditSubjectModal.tsx
-// Purpose: Modal form to edit an existing Subject, fetches preloaded data, shows related staff/classes, with optimistic UI updates.
+"use client";
 
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useSubjectStore } from "@/app/store/subjectStore.ts";
+import { X, Edit3, Hash, User, Loader2 } from "lucide-react";
 
 // ------------------------- Schema -------------------------
 const editSubjectSchema = z.object({
@@ -19,7 +19,7 @@ interface EditSubjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   subjectId: string;
-  onSuccess?: () => void; // ✅ added callback
+  onSuccess?: () => void;
 }
 
 // ------------------------- Modal Component -------------------------
@@ -40,7 +40,6 @@ export default function EditSubjectModal({
       resolver: zodResolver(editSubjectSchema),
     });
 
-  // ------------------------- Fetch subject data on open -------------------------
   useEffect(() => {
     if (isOpen && subjectId) {
       setLoading(true);
@@ -55,7 +54,6 @@ export default function EditSubjectModal({
     }
   }, [isOpen, subjectId, reset]);
 
-  // ------------------------- Submit handler -------------------------
   const onSubmit = async (data: EditSubjectFormData) => {
     setError(null);
     setSuccess(null);
@@ -64,7 +62,7 @@ export default function EditSubjectModal({
       const updated = await updateSubject(subjectId, data);
       if (updated) {
         setSuccess("Subject updated successfully");
-        onSuccess?.(); // ✅ trigger parent refresh
+        onSuccess?.();
       }
     } catch (err: any) {
       setError(err.message || "Failed to update subject");
@@ -74,84 +72,161 @@ export default function EditSubjectModal({
   };
 
   if (!isOpen) return null;
-  if (loading && !subject) return <div>Loading subject...</div>;
 
-  // ------------------------- Render -------------------------
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg w-full max-w-md">
-        <h2 className="text-lg font-semibold mb-4">Edit Subject</h2>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block mb-1">Name</label>
-            <input
-              {...register("name")}
-              className="w-full border p-2 rounded"
-              placeholder="Enter subject name"
-              disabled={loading}
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div
+        style={{ backgroundColor: "#03102b", borderColor: "#1c376e" }}
+        className="relative w-full max-w-md rounded-2xl border shadow-2xl p-8 animate-in fade-in zoom-in duration-200"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="space-y-1">
+            <h2
+              style={{ color: "#BFCDEF" }}
+              className="text-xl font-black uppercase tracking-tighter"
+            >
+              Edit Subject
+            </h2>
+            <div
+              className="h-1 w-12 rounded-full"
+              style={{ backgroundColor: "#6BE8EF" }}
             />
-            {formState.errors.name && (
-              <p className="text-red-500 text-sm">
-                {formState.errors.name.message}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-[#BFCDEF] opacity-40 hover:opacity-100 transition-opacity"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {loading && !subject ? (
+          <div className="flex flex-col items-center justify-center py-10 space-y-3">
+            <Loader2 className="w-8 h-8 animate-spin text-[#6BE8EF]" />
+            <p className="text-[#BFCDEF] text-xs font-bold uppercase tracking-widest opacity-60">
+              Fetching Data...
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* Subject Name */}
+            <div className="group">
+              <label
+                style={{ color: "#BFCDEF" }}
+                className="block mb-2 text-xs font-black uppercase tracking-widest opacity-70"
+              >
+                Subject Name
+              </label>
+              <div className="relative">
+                <Edit3
+                  size={16}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6BE8EF] opacity-40"
+                />
+                <input
+                  {...register("name")}
+                  style={{
+                    backgroundColor: "#1c376e",
+                    color: "#BFCDEF",
+                    borderColor: "#BFCDEF33",
+                  }}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#6BE8EF] transition-all"
+                  placeholder="e.g. Mathematics"
+                  disabled={loading}
+                />
+              </div>
+              {formState.errors.name && (
+                <p className="text-[#E74C3C] text-[10px] font-bold uppercase tracking-wider mt-2">
+                  {formState.errors.name.message}
+                </p>
+              )}
+            </div>
+
+            {/* Subject Code */}
+            <div className="group">
+              <label
+                style={{ color: "#BFCDEF" }}
+                className="block mb-2 text-xs font-black uppercase tracking-widest opacity-70"
+              >
+                Subject Code
+              </label>
+              <div className="relative">
+                <Hash
+                  size={16}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6BE8EF] opacity-40"
+                />
+                <input
+                  {...register("code")}
+                  style={{
+                    backgroundColor: "#1c376e",
+                    color: "#BFCDEF",
+                    borderColor: "#BFCDEF33",
+                  }}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#6BE8EF] transition-all"
+                  placeholder="e.g. MATH101"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {/* Meta Info Badge */}
+            {subject?.createdBy && (
+              <div
+                style={{ backgroundColor: "#1c376e55" }}
+                className="flex items-center gap-3 p-3 rounded-xl border border-[#1c376e]"
+              >
+                <div className="p-2 rounded-lg bg-[#03102b]">
+                  <User size={14} className="text-[#6BE8EF]" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-[#BFCDEF] opacity-50 uppercase font-black">
+                    Managed By
+                  </span>
+                  <span className="text-xs text-[#BFCDEF] font-bold">
+                    {subject.createdBy.name}{" "}
+                    <span className="opacity-40 italic font-normal">
+                      ({subject.createdBy.role})
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Feedback */}
+            {error && (
+              <p className="text-[#E74C3C] text-[10px] font-bold uppercase tracking-wider bg-[#E74C3C]/10 p-3 rounded-lg border border-[#E74C3C]/20">
+                {error}
               </p>
             )}
-          </div>
+            {success && (
+              <p className="text-[#6BE8EF] text-[10px] font-bold uppercase tracking-wider bg-[#6BE8EF]/10 p-3 rounded-lg border border-[#6BE8EF]/20">
+                {success}
+              </p>
+            )}
 
-          {/* Code */}
-          <div>
-            <label className="block mb-1">Code</label>
-            <input
-              {...register("code")}
-              className="w-full border p-2 rounded"
-              placeholder="Enter subject code (optional)"
-              disabled={loading}
-            />
-          </div>
-
-          {/* Created by info */}
-          {subject?.createdBy && (
-            <div>
-              <strong>Created by:</strong> {subject.createdBy.name} (
-              {subject.createdBy.role})
+            {/* Buttons */}
+            <div className="flex justify-end gap-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                style={{ color: "#BFCDEF" }}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/5 transition-colors"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{ backgroundColor: "#6BE8EF", color: "#03102b" }}
+                className="px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#6BE8EF]/10 disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? "Saving..." : "Update Subject"}
+              </button>
             </div>
-          )}
-
-          {/* Feedback */}
-          {error && <p className="text-red-500">{error}</p>}
-          {success && <p className="text-green-500">{success}</p>}
-
-          {/* Buttons */}
-          <div className="flex justify-end space-x-2 mt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded"
-              disabled={loading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded"
-              disabled={loading}
-            >
-              {loading ? "Saving..." : "Update"}
-            </button>
-          </div>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );
 }
-
-/* Design reasoning:
-- Added onSuccess for parent-level control (refresh + close modal).
-- Keeps validation and error boundaries self-contained.
-- Loading guard ensures data consistency when opening modal.
-
-Scalability insight:
-- Can easily extend to include related entities (staff/class assignment).
-- Pattern matches Add/Delete modals for predictable behavior.
-*/

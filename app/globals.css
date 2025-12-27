@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
 
-/* --- Ford School Colors --- */
 :root {
   /* SYSTEM COLORS */
    --color-ark-lightblue: #BFCDEF;
@@ -9,17 +8,8 @@
   --color-ark-deepblue: #1c376e;
   --color-ark-navy: #03102b;
   --color-ark-cyan: #6BE8EF;
-
-  /* TEMPORARY FORD COLORS */
-  --ford-primary: #3f0101;
-  --ford-secondary: #820000;
-  --ford-card: #29051c;
-  --background: #99aac9;
-  --neutral-dark: #44001f;
-  --typo: #edeeff;
-  --success: #16a34a;
-  --warning: #facc15;
 }
+
 
 /* --- Global Defaults --- */
 body {

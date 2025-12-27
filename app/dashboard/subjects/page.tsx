@@ -1,10 +1,16 @@
-// app/subjects/page.tsx
-// Purpose: Subjects management page integrated with Zustand store, supporting search, pagination, and CRUD modals.
-
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  BookOpen,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSubjectStore } from "@/app/store/subjectStore.ts";
 import { useClassesStore } from "@/app/store/useClassesStore.ts";
@@ -26,6 +32,7 @@ export default function SubjectsPage() {
   const [deleteModal, setDeleteModal] = useState<{
     open: boolean;
     subjectId?: string;
+    subjectName?: string;
   }>({ open: false });
 
   // ------------------------- Zustand stores -------------------------
@@ -35,13 +42,10 @@ export default function SubjectsPage() {
     page,
     limit,
     loading,
-    error,
     fetchSubjects,
-    deleteSubject,
     setPage,
     setSearch,
   } = useSubjectStore();
-
   const { fetchClasses } = useClassesStore();
   const { fetchStaff } = useStaffStore();
 
@@ -55,179 +59,210 @@ export default function SubjectsPage() {
   }, []);
 
   useEffect(() => {
-    setSearch(localSearch);
+    const handler = setTimeout(() => setSearch(localSearch), 300);
+    return () => clearTimeout(handler);
   }, [localSearch]);
-
-  // ------------------------- Handlers -------------------------
-  const handleDelete = async (id: string) => {
-    await deleteSubject(id);
-    setDeleteModal({ open: false });
-    fetchSubjects(page, localSearch);
-  };
-
-  const handleRowClick = (subjectId: string) => {
-    router.push(`/dashboard/subjects/${subjectId}`);
-  };
 
   // ------------------------- Render -------------------------
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mt-7">
-        <h1 className="text-2xl font-semibold">Subjects</h1>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Search subjects..."
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            className="px-3 py-2 border rounded-md focus:outline-none focus:ring focus:ring-ford-primary"
-          />
-          <button
-            type="button"
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-1 bg-ford-primary text-white px-3 py-1 rounded-md text-sm hover:bg-ford-secondary transition"
+    <div className="p-4 md:p-8 space-y-8 min-h-screen text-white mt-10">
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div>
+          <h1
+            className="text-4xl font-black tracking-tight"
+            style={{ color: "#BFCDEF" }}
           >
-            <Plus className="w-4 h-4" /> Add Subject
+            SUBJECTS
+          </h1>
+          <div className="flex items-center gap-2 mt-1">
+            <div
+              className="h-1 w-8 rounded-full"
+              style={{ backgroundColor: "#6BE8EF" }}
+            />
+            <p className="opacity-60 text-xs uppercase tracking-widest font-bold">
+              Academic Curriculum
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 lg:w-72 group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40 group-focus-within:text-[#6BE8EF] transition-colors" />
+            <input
+              type="text"
+              placeholder="Search curriculum..."
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              style={{ backgroundColor: "#1c376e", borderColor: "#BFCDEF33" }}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-[#6BE8EF] focus:outline-none transition-all placeholder:text-[#BFCDEF]/20 text-sm"
+            />
+          </div>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            style={{ backgroundColor: "#6BE8EF", color: "#03102b" }}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-[1.03] transition-all shadow-lg shadow-[#6BE8EF]/10"
+          >
+            <Plus className="w-4 h-4" strokeWidth={3} />
+            Add Subject
           </button>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto border rounded-lg">
-        <table className="min-w-full text-sm">
-          <thead className="bg-ford-primary text-white">
-            <tr>
-              <th className="px-4 py-2 text-left">Name</th>
-              <th className="px-4 py-2 text-left">Code</th>
-              <th className="px-4 py-2 text-left">Description</th>
-              <th className="px-4 py-2 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={4} className="text-center py-6">
-                  <Loader2 className="animate-spin w-5 h-5 mx-auto text-gray-400" />
-                </td>
+      {/* Table Section */}
+      <div
+        style={{ backgroundColor: "#03102b", borderColor: "#1c376e" }}
+        className="border rounded-2xl overflow-hidden shadow-2xl transition-all"
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr
+                style={{ backgroundColor: "#1c376e" }}
+                className="text-[#BFCDEF] uppercase text-[10px] font-black tracking-[0.2em]"
+              >
+                <th className="px-6 py-4">Subject Name</th>
+                <th className="px-6 py-4 text-center">Code</th>
+                <th className="px-6 py-4 hidden md:table-cell">Description</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
-            ) : subjects.length > 0 ? (
-              subjects.map((subject) => (
-                <tr
-                  key={subject.id}
-                  className="border-b hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => handleRowClick(subject.id)}
-                >
-                  <td className="px-4 py-2">{subject.name ?? "—"}</td>
-                  <td className="px-4 py-2">{subject.code ?? "—"}</td>
-                  <td className="px-4 py-2">{subject.description ?? "—"}</td>
-                  <td className="px-4 py-2 flex gap-2">
-                    <button
-                      className="px-2 py-1 rounded bg-blue-500 text-white text-sm hover:bg-blue-600"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditModal({ open: true, subjectId: subject.id });
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="px-2 py-1 rounded bg-red-500 text-white text-sm hover:bg-red-600"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteModal({ open: true, subjectId: subject.id });
-                      }}
-                    >
-                      Delete
-                    </button>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="py-20 text-center">
+                    <Loader2 className="animate-spin w-8 h-8 mx-auto text-[#6BE8EF] opacity-50" />
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="text-center py-6 text-gray-500 italic"
-                >
-                  No subjects found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              ) : subjects.length > 0 ? (
+                subjects.map((subject) => (
+                  <tr
+                    key={subject.id}
+                    className="group hover:bg-white/5 transition-all cursor-pointer"
+                    onClick={() =>
+                      router.push(`/dashboard/subjects/${subject.id}`)
+                    }
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-[#1c376e]/50 text-[#6BE8EF]">
+                          <BookOpen size={16} />
+                        </div>
+                        <span className="font-bold text-[#BFCDEF] group-hover:text-[#6BE8EF] transition-colors">
+                          {subject.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="bg-[#BFCDEF]/10 text-[#BFCDEF] px-3 py-1 rounded-full text-[10px] font-bold tracking-widest border border-[#BFCDEF]/10">
+                        {subject.code || "N/A"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 hidden md:table-cell max-w-xs truncate opacity-60 text-sm italic">
+                      {subject.description || "No description provided"}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditModal({ open: true, subjectId: subject.id });
+                          }}
+                          className="p-2 rounded-lg hover:bg-white/10 text-[#BFCDEF] transition-colors"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteModal({
+                              open: true,
+                              subjectId: subject.id,
+                              subjectName: subject.name,
+                            });
+                          }}
+                          className="p-2 rounded-lg hover:bg-[#E74C3C]/20 text-[#E74C3C] transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="py-20 text-center opacity-40 italic text-sm"
+                  >
+                    No subjects found in the curriculum
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="px-6 py-4 border-t border-white/5 flex items-center justify-between bg-black/20">
+          <p className="text-[10px] font-bold text-[#BFCDEF] opacity-40 uppercase tracking-widest">
+            Total Results: {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+              className="p-2 rounded-lg border border-white/10 hover:bg-white/5 disabled:opacity-20 transition-all"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div
+              style={{ backgroundColor: "#1c376e", color: "#6BE8EF" }}
+              className="px-4 py-1 rounded-lg text-xs font-black border border-[#6BE8EF]/20"
+            >
+              {page} / {totalPages}
+            </div>
+            <button
+              disabled={page === totalPages || totalPages === 0}
+              onClick={() => setPage(page + 1)}
+              className="p-2 rounded-lg border border-white/10 hover:bg-white/5 disabled:opacity-20 transition-all"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Pagination */}
-      <div className="flex justify-end gap-2 mt-2">
-        <button
-          disabled={page === 1}
-          onClick={() => setPage(page - 1)}
-          className="px-3 py-1 rounded border disabled:opacity-50"
-        >
-          Prev
-        </button>
-        <span className="px-2 py-1">
-          {page} / {totalPages}
-        </span>
-        <button
-          disabled={page === totalPages || totalPages === 0}
-          onClick={() => setPage(page + 1)}
-          className="px-3 py-1 rounded border disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
-
-      {/* Modals */}
+      {/* Modals Container */}
       {isAddModalOpen && (
         <AddSubjectModal
+          isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          onSuccess={() => {
-            setIsAddModalOpen(false);
-            fetchSubjects();
-          }}
+          onSuccess={() => fetchSubjects(page, localSearch)}
         />
       )}
 
       {editModal.open && editModal.subjectId && (
         <EditSubjectModal
+          isOpen={editModal.open}
           subjectId={editModal.subjectId}
           onClose={() => setEditModal({ open: false })}
-          onSuccess={() => {
-            setEditModal({ open: false });
-            fetchSubjects(page, localSearch);
-          }}
+          onSuccess={() => fetchSubjects(page, localSearch)}
         />
       )}
 
       {deleteModal.open && deleteModal.subjectId && (
         <ConfirmDeleteModal
-          title="Delete Subject"
-          message="Are you sure you want to delete this subject?"
-          onConfirm={() => handleDelete(deleteModal.subjectId!)}
+          subjectId={deleteModal.subjectId}
+          subjectName={deleteModal.subjectName || "this subject"}
           onClose={() => setDeleteModal({ open: false })}
+          onSuccess={() => {
+            setDeleteModal({ open: false });
+            fetchSubjects(page, localSearch);
+          }}
         />
       )}
     </div>
   );
 }
-
-/*
-Design reasoning:
-- Removed sort logic to match current Zustand store design (search + pagination only).
-- Keeps UI responsive and clear, with optimistic modal closure on success.
-- Maintains clean separation: state logic (store) vs. view logic (component).
-
-Structure:
-- State: local search, modal open/close.
-- Data: from useSubjectStore with pagination.
-- Actions: create, update, delete handled via modal callbacks.
-
-Implementation guidance:
-- Fetch and update subjects through store only.
-- Extend table columns as schema grows (e.g., staff assignments).
-
-Scalability insight:
-- Adding filters (e.g., by class or staff) requires no core layout change.
-- Easily replaced by a reusable <PaginatedTable> component for future entities.
-*/
