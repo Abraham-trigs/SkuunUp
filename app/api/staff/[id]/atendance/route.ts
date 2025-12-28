@@ -1,4 +1,4 @@
-// app/api/staffAttendance/route.ts
+// app/api/staff/[id]/attendance/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
