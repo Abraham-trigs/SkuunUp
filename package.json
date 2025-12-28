@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "prisma generate && next build --turbopack",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest"
@@ -81,6 +82,6 @@
     "vitest": "^4.0.15"
   },
   "prisma": {
-    "seed": "ts-node  prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts"
   }
 }
