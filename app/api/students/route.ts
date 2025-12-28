@@ -5,8 +5,9 @@ import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
 
-async function authorize(req: NextRequest) {
-  const schoolAccount = await SchoolAccount.init(req);
+// ------------------ Authorization ------------------
+async function authorize(req: NextRequest) {       
+  const schoolAccount = await SchoolAccount.init();
   if (!schoolAccount) return null;
   return schoolAccount;
 }

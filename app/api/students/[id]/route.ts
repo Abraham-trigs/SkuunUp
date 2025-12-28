@@ -10,7 +10,6 @@ import { z } from "zod";
 
 // ------------------ Authorization ------------------
 async function authorize(req: NextRequest) {       
-  // FIXED: Remove 'req' to match the SchoolAccount.init() signature
   const schoolAccount = await SchoolAccount.init();
   if (!schoolAccount) return null;
   return schoolAccount;
