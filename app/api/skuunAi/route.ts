@@ -9,19 +9,16 @@ import { AIActionType } from "@/lib/types/skuunAiTypes.ts";
 import { determineAutoActions, triggerAutoActions } from "@/lib/skuunAiAutoActions.ts";
 
 // -------------------- Zod Schemas --------------------
-// Schema for sending a message
 const sendMessageSchema = z.object({
   content: z.string().min(1, "Message content cannot be empty"),
   type: z.enum(["TEXT", "JSON", "IMAGE"]),
 });
 
-// Schema for triggering an AI action
 const triggerActionSchema = z.object({
   type: z.nativeEnum(AIActionType),
   payload: z.any(),
 });
 
-// Schema for query parameters (pagination)
 const querySchema = z.object({
   page: z.string().optional(),
   perPage: z.string().optional(),
@@ -44,10 +41,8 @@ async function generateRecommendations(
     targetId?: string;
   }[] = [];
 
-  // Normalize payload to ensure it's an object
   const normalizedPayload = typeof payload === "object" ? payload : { message: payload };
 
-  // Map specific AI actions to recommendation messages
   switch (actionType) {
     case AIActionType.PREDICT_ATTENDANCE:
       recommendations.push({
@@ -90,7 +85,6 @@ async function generateRecommendations(
 
   if (!recommendations.length) return;
 
-  // Persist recommendations to DB, skipping duplicates
   await prisma.skuunAiRecommendation.createMany({
     data: recommendations.map((rec) => ({
       sessionId,
@@ -106,7 +100,6 @@ async function generateRecommendations(
 // -------------------- GET SkuunAi Sessions --------------------
 export async function GET(req: NextRequest) {
   try {
-    // Auth: Initialize school account context
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -116,12 +109,13 @@ export async function GET(req: NextRequest) {
     const page = Number(query.page || 1);
     const perPage = Number(query.perPage || 10);
 
+    // FIXED: Use .info.id to match SchoolAccount class getters
     const total = await prisma.skuunAiSession.count({
-      where: { userId: schoolAccount.userId },
+      where: { userId: schoolAccount.info.id },
     });
 
     const sessions = await prisma.skuunAiSession.findMany({
-      where: { userId: schoolAccount.userId },
+      where: { userId: schoolAccount.info.id },
       skip: (page - 1) * perPage,
       take: perPage,
       orderBy: { createdAt: "desc" },
@@ -131,7 +125,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ sessions, total, page, perPage });
   } catch (err: any) {
     if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+      return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
 }
@@ -139,7 +133,6 @@ export async function GET(req: NextRequest) {
 // -------------------- POST Message or AI Action --------------------
 export async function POST(req: NextRequest) {
   try {
-    // Auth: Initialize school account context
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -150,10 +143,10 @@ export async function POST(req: NextRequest) {
     if ("content" in body) {
       const data = sendMessageSchema.parse(body);
 
-      // Create session with the incoming message
       const session = await prisma.skuunAiSession.create({
         data: {
-          userId: schoolAccount.userId,
+          // FIXED: Use SchoolAccount getters and remove schoolId (missing in model)
+          userId: schoolAccount.info.id,
           role: schoolAccount.role,
           messages: { create: { content: data.content, type: data.type, sender: "USER" } },
         },
@@ -162,11 +155,10 @@ export async function POST(req: NextRequest) {
 
       sessionId = session.id;
 
-      // Determine auto AI actions based on message content & role
+      // Determine auto AI actions based on content and account role
       const autoActions = determineAutoActions(data.content, schoolAccount.role);
       if (autoActions.length) await triggerAutoActions(sessionId, autoActions, { message: data.content });
 
-      // Generate AI recommendations concurrently for all auto actions
       await Promise.all(
         autoActions.map((actionType) =>
           generateRecommendations(sessionId, actionType, { message: data.content })
@@ -179,7 +171,7 @@ export async function POST(req: NextRequest) {
 
       const session = await prisma.skuunAiSession.create({
         data: {
-          userId: schoolAccount.userId,
+          userId: schoolAccount.info.id,
           role: schoolAccount.role,
           actions: { create: { type: data.type, payload: data.payload } },
         },
@@ -193,7 +185,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    // Fetch and return the updated session with related data
     const updatedSession = await prisma.skuunAiSession.findUniqueOrThrow({
       where: { id: sessionId },
       include: { messages: true, actions: true, SkuunAiRecommendation: true },
@@ -201,30 +192,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(updatedSession, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+    if (err instanceof z.ZodError) {
+      // FIXED: Use .issues for 2025 Zod compatibility
+      return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
+    }
     return NextResponse.json({ error: err.message || "Failed to process request" }, { status: 500 });
   }
 }
-
-/*
-Design reasoning:
-- Centralizes AI session handling, messaging, and automated recommendation creation.
-- Ensures every AI action or user message generates actionable insights.
-- Authenticated by SchoolAccount to scope data per user and role.
-
-Structure:
-- GET: list sessions with messages, actions, and recommendations; supports pagination.
-- POST: handles new messages or AI actions, triggers automated AI actions, and stores recommendations.
-
-Implementation guidance:
-- Validate all inputs using Zod schemas to prevent invalid payloads.
-- Normalize payloads before generating recommendations.
-- Concurrently generate recommendations to minimize latency.
-- Include auth checks before any DB operation.
-
-Scalability insight:
-- Auto-actions and recommendation generation are asynchronous; can scale horizontally.
-- Pagination prevents large queries from impacting performance.
-- Adding new AIActionTypes requires minimal code changes, just extend the switch in generateRecommendations.
-*/
