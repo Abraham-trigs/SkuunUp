@@ -1,10 +1,9 @@
-import { defineConfig } from '@prisma/config';
-import * as dotenv from 'dotenv';
-
-dotenv.config(); // ensures .env variables are loaded
+// prisma.config.ts
+import 'dotenv/config'; 
+import { defineConfig } from 'prisma/config';
 
 export default defineConfig({
-  seed: {
-    command: 'ts-node prisma/seed.ts',
+  migrations: {
+    seed: 'ts-node prisma/seed.ts',
   },
 });

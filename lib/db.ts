@@ -1,21 +1,19 @@
 // lib/db.ts
-// Centralized Prisma Client (singleton-safe for dev + production)
+// Update the import to point to your new generated folder
+import { PrismaClient } from "../generated/prisma"; 
 
-import { PrismaClient } from "@prisma/client";
-
-// Prevent multiple instances during Next.js hot reload
-declare global {
-  // eslint-disable-next-line no-var
-  var prisma: PrismaClient | undefined;
-}
-
-export const prisma =
-  global.prisma ??
-  new PrismaClient({
-    log: ["query", "info", "warn", "error"], // optional debugging logs
+const prismaClientSingleton = () => {
+  return new PrismaClient({
+    log: ["query", "info", "warn", "error"],
   });
+};
 
-// Cache client in dev environment only
+declare const globalThis: {
+  prisma: ReturnType<typeof prismaClientSingleton> | undefined;
+} & typeof global;
+
+export const prisma = globalThis.prisma ?? prismaClientSingleton();
+
 if (process.env.NODE_ENV !== "production") {
-  global.prisma = prisma;
+  globalThis.prisma = prisma;
 }

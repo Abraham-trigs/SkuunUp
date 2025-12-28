@@ -1,0 +1,840 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+enum Role {
+  ADMIN
+  MODERATOR
+  PRINCIPAL
+  VICE_PRINCIPAL
+  TEACHER
+  ASSISTANT_TEACHER
+  COUNSELOR
+  LIBRARIAN
+  EXAM_OFFICER
+  FINANCE
+  HR
+  RECEPTIONIST
+  IT_SUPPORT
+  TRANSPORT
+  NURSE
+  COOK
+  CLEANER
+  SECURITY
+  MAINTENANCE
+  STUDENT
+  CLASS_REP
+  PARENT
+  ALUMNI
+  AUDITOR
+}
+
+enum ApplicationStatus {
+  DRAFT // still filling form
+  READY_FOR_REVIEW // all required fields filled
+  SUBMITTED // finalised
+  APPROVED // accepted
+  REJECTED // declined
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  domain    String   @unique // default domain for generating emails
+  email     String   @unique // school's main contact email
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users            User[]
+  classes          Class[]
+  buses            Bus[]
+  finances         Finance[]
+  activities       Activity[]
+  resources        Resource[]
+  Book             Book[]
+  applications     Application[]
+  StaffApplication StaffApplication[]
+  Student          Student[]
+}
+
+model User {
+  id String @id @default(cuid())
+
+  // ---- Personal Information (authoritative) ----
+  surname    String
+  firstName  String
+  otherNames String?
+
+  // ---- Auth ----
+  email    String @unique
+  password String
+  role     Role
+
+  // ---- School Association ----
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  // ---- Relations ----
+  student         Student?
+  staff           Staff?
+  LibraryStaff    LibraryStaff?
+  createdSubjects Subject[]
+
+  // Each user can have exactly ONE application
+  application Application? @relation("UserApplication")
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  SkuunAiSession SkuunAiSession[]
+}
+
+// prisma/application.prisma
+// Models to capture student admission application form data with indexes.
+
+model Student {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id])
+  name     String?
+  schoolId String
+  school   School  @relation(fields: [schoolId], references: [id])
+
+  subjects          Subject[]           @relation("StudentSubjects")
+  application       Application?        @relation("StudentApplication")
+  enrolledAt        DateTime            @default(now())
+  Class             Class?              @relation(fields: [classId], references: [id])
+  classId           String?
+  Exam              Exam[]
+  StudentAttendance StudentAttendance[]
+  Parent            Parent[]
+  Borrow            Borrow[]
+  Transaction       Transaction[]
+  Purchase          Purchase[]
+  Grade             Grade?              @relation(fields: [gradeId], references: [id])
+  gradeId           String?
+}
+
+// ------------------ Class ------------------
+model Class {
+  id       String @id @default(cuid())
+  name     String // e.g., "6"
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  // Optional relations
+  grades   Grade[] // sections like A, B
+  students Student[] // optional
+  staff    Staff[] // optional
+  exams    Exam[] // optional
+  subjects Subject[] @relation("ClassSubjects") // optional
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, schoolId])
+}
+
+// ------------------ Grade / Section ------------------
+model Grade {
+  id      String  @id @default(cuid())
+  name    String  @default("A") // defaults to "A" if not specified
+  classId String? // nullable foreign key
+  class   Class?  @relation(fields: [classId], references: [id])
+
+  students Student[] // optional
+
+  // Many-to-many relation with Staff (for multiple grade assignments)
+  staff Staff[] @relation("StaffGrades")
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  Application Application[]
+
+  @@unique([name, classId])
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  code      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Make createdById nullable initially to avoid breaking existing rows
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  exams    Exam[]
+  staff    Staff[]   @relation("StaffSubjects")
+  students Student[] @relation("StudentSubjects") // many-to-many
+  classes  Class[]   @relation("ClassSubjects") // many-to-many
+
+  // Many-to-many relation with StaffApplication
+  staffApplications StaffApplication[] @relation("StaffApplicationSubjects")
+}
+
+model Exam {
+  id        String   @id @default(cuid())
+  title     String
+  studentId String?
+  student   Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId   String?
+  class     Class?   @relation(fields: [classId], references: [id])
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  score     Float?
+  maxScore  Float?
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Application {
+  id String @id @default(cuid())
+
+  // ---- Relations ----
+  studentId String?  @unique
+  student   Student? @relation("StudentApplication", fields: [studentId], references: [id])
+
+  userId String? @unique
+  user   User?   @relation("UserApplication", fields: [userId], references: [id])
+
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id])
+
+  admissionPaymentId String?
+  admissionPayment   AdmissionPayment? @relation(fields: [admissionPaymentId], references: [id])
+
+  previousSchools PreviousSchool[]
+  familyMembers   FamilyMember[]
+
+  // ---- Core Personal Fields ----
+  dateOfBirth DateTime?
+  nationality String?
+  sex         String?
+
+  // ---- Optional Multi-step Fields ----
+  languages      String[]
+  gradeId        String? // optional, references Grade
+  grade          Grade?   @relation(fields: [gradeId], references: [id])
+  mothersTongue  String?
+  religion       String?
+  denomination   String?
+  hometown       String?
+  region         String?
+  profilePicture String?
+
+  wardLivesWith           String?
+  numberOfSiblings        Int?
+  siblingsOlder           Int?
+  siblingsYounger         Int?
+  postalAddress           String?
+  residentialAddress      String?
+  wardMobile              String?
+  emergencyContact        String?
+  emergencyMedicalContact String?
+
+  medicalSummary    String?
+  bloodType         String?
+  specialDisability String?
+
+  // ---- Acknowledgement & Declaration ----
+  feesAcknowledged  Boolean @default(false)
+  declarationSigned Boolean @default(false)
+  signature         String?
+
+  // ---- Submission Meta ----
+  submissionDate DateTime? @default(now())
+  classification String?
+  submittedBy    String?
+  receivedBy     String?
+  receivedDate   DateTime?
+  remarks        String?
+
+  // ---- Workflow ----
+  status   ApplicationStatus @default(DRAFT)
+  progress Int               @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ---- Indexes ----
+  @@index([schoolId])
+  @@index([gradeId])
+  @@index([submissionDate])
+  @@index([feesAcknowledged])
+  @@index([schoolId, gradeId])
+  @@index([submissionDate, feesAcknowledged])
+}
+
+model PreviousSchool {
+  id            String      @id @default(cuid())
+  application   Application @relation(fields: [applicationId], references: [id])
+  applicationId String
+  name          String
+  location      String
+  startDate     DateTime
+  endDate       DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId])
+}
+
+model FamilyMember {
+  id                 String      @id @default(cuid())
+  application        Application @relation(fields: [applicationId], references: [id])
+  applicationId      String
+  relation           String // Father / Mother / Guardian
+  name               String
+  postalAddress      String
+  residentialAddress String
+  phone              String?
+  email              String?
+  occupation         String?
+  workplace          String?
+  religion           String?
+  isAlive            Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId])
+  @@index([relation])
+  @@index([name])
+}
+
+model StaffApplication {
+  id       String  @id @default(cuid())
+  staffId  String? @unique
+  staff    Staff?  @relation(fields: [staffId], references: [id])
+  schoolId String
+  school   School  @relation(fields: [schoolId], references: [id])
+
+  // Personal Info
+  surname        String
+  firstName      String
+  otherNames     String?
+  dateOfBirth    DateTime
+  nationality    String
+  sex            String
+  languages      String[]
+  maritalStatus  String?
+  religion       String
+  denomination   String?
+  hometown       String
+  region         String
+  profilePicture String? // ✅ added profile picture URL
+
+  // Contact Info
+  residentialAddress String
+  postalAddress      String
+  mobile             String?
+  email              String?
+  emergencyContact   String
+  nextOfKin          String?
+
+  // Professional Info
+  position       String
+  departmentId   String?
+  department     Department?   @relation(fields: [departmentId], references: [id])
+  subjects       Subject[]     @relation("StaffApplicationSubjects")
+  hireDate       DateTime?
+  salary         Float?
+  qualifications String?
+  previousJobs   PreviousJob[]
+
+  // Medical Info
+  bloodType         String?
+  medicalConditions String?
+  specialDisability String?
+
+  // Declaration & Office Use
+  declarationSigned Boolean  @default(false)
+  signature         String?
+  submissionDate    DateTime @default(now())
+  classification    String?
+  submittedBy       String?
+  receivedBy        String?
+  remarks           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([schoolId])
+  @@index([position])
+  @@index([submissionDate])
+  @@index([departmentId])
+}
+
+model PreviousJob {
+  id                 String           @id @default(cuid())
+  staffApplication   StaffApplication @relation(fields: [staffApplicationId], references: [id])
+  staffApplicationId String
+  company            String
+  role               String
+  startDate          DateTime
+  endDate            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([staffApplicationId])
+}
+
+// ------------------ Staff ------------------
+model Staff {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Optional class-level assignment
+  classId String?
+  class   Class?  @relation(fields: [classId], references: [id])
+
+  // Many-to-many grade assignments
+  grades Grade[] @relation("StaffGrades")
+
+  position String?
+  salary   Float?
+  hireDate DateTime?
+
+  department   Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+
+  subjects         Subject[]         @relation("StaffSubjects") // optional: subjects they teach
+  attendances      StaffAttendance[]
+  StaffApplication StaffApplication?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Department {
+  id               String             @id @default(cuid())
+  name             String             @unique
+  staff            Staff[]
+  LibraryStaff     LibraryStaff[]
+  StaffApplication StaffApplication[]
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model StudentAttendance {
+  id        String           @id @default(cuid())
+  studentId String
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId   String
+  date      DateTime         @default(now())
+  status    AttendanceStatus
+  timeIn    DateTime?
+  timeOut   DateTime?
+  remarks   String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([studentId, date], name: "studentId_date")
+}
+
+model StaffAttendance {
+  id        String           @id @default(cuid())
+  staffId   String
+  staff     Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date      DateTime         @default(now())
+  status    AttendanceStatus
+  timeIn    DateTime?
+  timeOut   DateTime?
+  remarks   String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model Parent {
+  id             String   @id @default(cuid())
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  name           String
+  email          String   @unique
+  phone          String?
+  profilePicture String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// prisma/library.prisma
+// Library management models integrated with Department and School
+
+model Author {
+  id        String   @id @default(cuid())
+  name      String
+  bio       String?
+  books     Book[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  books     Book[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Book {
+  id          String    @id @default(cuid())
+  title       String
+  isbn        String    @unique
+  authorId    String
+  author      Author    @relation(fields: [authorId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  totalCopies Int       @default(1)
+  available   Int       @default(1)
+  schoolId    String
+  school      School    @relation(fields: [schoolId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  borrows Borrow[]
+}
+
+model Borrow {
+  id         String    @id @default(cuid())
+  bookId     String
+  book       Book      @relation(fields: [bookId], references: [id])
+  studentId  String
+  student    Student   @relation(fields: [studentId], references: [id], onDelete: Cascade) // ✅ added
+  borrowedAt DateTime  @default(now())
+  dueAt      DateTime
+  returnedAt DateTime?
+  fine       Float     @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([bookId, studentId, borrowedAt], name: "unique_borrow")
+}
+
+model LibraryStaff {
+  id           String     @id @default(cuid())
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [id])
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  position     String?
+  hireDate     DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+//TRANSACTION
+
+enum FinanceType {
+  INCOME
+  EXPENSE
+}
+
+enum FeeType {
+  ADMISSION
+  TUITION
+  EXAM
+  LAB
+  SPORTS
+  LIBRARY
+  TRANSPORT
+  UNIFORM
+  OTHER
+}
+
+model AdmissionPayment {
+  id          String        @id @default(cuid())
+  studentId   String
+  schoolId    String
+  amount      Float
+  pinCode     String        @unique
+  used        Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  Application Application[]
+
+  @@index([studentId])
+  @@index([schoolId])
+  @@index([used])
+}
+
+//FINANCE 
+
+model Transaction {
+  id          String      @id @default(cuid())
+  studentId   String
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type        FinanceType @default(INCOME)
+  feeType     FeeType?
+  amount      Float
+  date        DateTime    @default(now())
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Finance {
+  id          String      @id @default(cuid())
+  schoolId    String
+  school      School      @relation(fields: [schoolId], references: [id])
+  type        FinanceType @default(INCOME)
+  amount      Float
+  description String?
+  date        DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Resource {
+  id        String   @id @default(cuid())
+  name      String
+  category  String?
+  unitPrice Float
+  quantity  Int      @default(1)
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases Purchase[]
+
+  @@unique([name, schoolId])
+}
+
+model Purchase {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade) // ✅ added
+  resourceId String
+  resource   Resource @relation(fields: [resourceId], references: [id])
+  quantity   Int      @default(1)
+  totalCost  Float
+  date       DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+//SCHOOL SCOPE
+
+model Activity {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Bus {
+  id          String   @id @default(cuid())
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+  plateNumber String   @unique
+  driverName  String
+  capacity    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------
+// SkuunAi Models
+// ---------------------------
+model SkuunAiSession {
+  id                    String                  @id @default(cuid())
+  user                  User                    @relation(fields: [userId], references: [id])
+  userId                String
+  role                  Role // Role of logged-in user for scoping
+  messages              SkuunAiMessage[]
+  actions               SkuunAiAction[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  SkuunAiRecommendation SkuunAiRecommendation[]
+}
+
+model SkuunAiMessage {
+  id        String         @id @default(cuid())
+  session   SkuunAiSession @relation(fields: [sessionId], references: [id])
+  sessionId String
+  sender    SenderType
+  type      MessageType
+  content   String
+  payload   Json? // Optional structured data (recommendations, predictions)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model SkuunAiAction {
+  id         String         @id @default(cuid())
+  session    SkuunAiSession @relation(fields: [sessionId], references: [id])
+  sessionId  String
+  type       AIActionType
+  payload    Json
+  status     ActionStatus   @default(PENDING)
+  executedAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+enum ActionStatus {
+  PENDING
+  EXECUTED
+  FAILED
+}
+
+enum SenderType {
+  USER
+  AI
+  SYSTEM
+}
+
+enum MessageType {
+  TEXT
+  JSON
+  IMAGE
+}
+
+enum AIActionType {
+  // ---------- Admissions & Student Management ----------
+  GUIDE_APPLICATION
+  VALIDATE_APPLICATION
+  PREDICT_GRADE_PLACEMENT
+  SUGGEST_SUBJECTS
+  GENERATE_PROFILE
+  FLAG_SPECIAL_NEEDS
+  FLAG_AT_RISK_STUDENTS
+  SUGGEST_INTERVENTIONS
+  TRACK_APPLICATION_PROGRESS
+
+  // ---------- Staff & HR Management ----------
+  STAFF_ROLE_ALLOCATION
+  GENERATE_STAFF_SCHEDULE
+  TRACK_STAFF_WORKLOAD
+  SUMMARIZE_PREVIOUS_JOBS
+  SUGGEST_HIRING_DECISIONS
+
+  // ---------- Classes, Grades & Subjects ----------
+  SUGGEST_CLASS_DISTRIBUTION
+  SUGGEST_SUBJECT_TEACHER_ALLOCATION
+  DETECT_MISSING_ASSIGNMENTS
+  GENERATE_CLASS_REPORTS
+  PREDICT_STUDENT_PERFORMANCE
+
+  // ---------- Exams & Academic Performance ----------
+  TRACK_EXAM_RESULTS
+  SUGGEST_ADAPTIVE_PATHS
+  CORRELATE_SCORE_ATTENDANCE
+  GENERATE_EXAM_REPORTS
+
+  // ---------- Attendance ----------
+  PREDICT_ATTENDANCE
+  GENERATE_ATTENDANCE_SUMMARIES
+  SUGGEST_ATTENDANCE_INTERVENTIONS
+
+  // ---------- Library & Resources ----------
+  TRACK_LIBRARY_USAGE
+  PREDICT_RESOURCE_NEEDS
+  NOTIFY_OVERDUE_ITEMS
+  RECOMMEND_NEW_RESOURCES
+  OPTIMIZE_LIBRARY_OPERATIONS
+
+  // ---------- Finance & Transactions ----------
+  FINANCIAL_INSIGHTS
+  FLAG_LATE_PAYMENTS
+  SUGGEST_BUDGET_ALLOCATIONS
+  GENERATE_FINANCIAL_REPORTS
+
+  // ---------- School Operations & Assets ----------
+  OPTIMIZE_BUS_ROUTES
+  TRACK_ASSETS
+  PREDICT_RESOURCE_SHORTAGES
+  SUGGEST_ACTIVITY_SCHEDULES
+
+  // ---------- Projects, Tasks & Milestones (Abraham module) ----------
+  TRACK_TASKS
+  GENERATE_PROJECT_PLANS
+  PREDICT_PROJECT_DELAYS
+  ASSIST_TASK_ALLOCATION
+  GENERATE_AI_CONTENT
+  ALIGN_GOALS
+
+  // ---------- AI Interactions & Automation ----------
+  CHAT_QA
+  AUTOMATE_REMINDERS
+  EXECUTE_ADMIN_ACTION
+  SUGGEST_POLICY_IMPROVEMENTS
+  GENERATE_SUMMARIES
+  TRACK_AI_ACTIONS
+
+  // ---------- Predictive & Analytical Insights ----------
+  PREDICT_STUDENT_TRENDS
+  PREDICT_STAFF_TRENDS
+  ALERT_CRITICAL_ISSUES
+  SUGGEST_INTERVENTION_PLANS
+}
+
+// ---------------------------
+// Optional: AI Recommendations
+// ---------------------------
+model SkuunAiRecommendation {
+  id        String         @id @default(cuid())
+  session   SkuunAiSession @relation(fields: [sessionId], references: [id])
+  sessionId String
+  category  String // e.g., "Attendance", "Finance", "Admissions"
+  targetId  String? // Optional ID the recommendation is for (student, staff, resource)
+  message   String // AI-generated recommendation
+  data      Json? // Any structured insights
+  resolved  Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model DecisionRecord {
+  id           String @id @default(cuid())
+  title        String
+  context      String
+  decision     String
+  consequences String
+
+  status DecisionStatus @default(PROPOSED)
+
+  supersedesId String?
+  supersedes   DecisionRecord?  @relation("DecisionSupersedes", fields: [supersedesId], references: [id])
+  supersededBy DecisionRecord[] @relation("DecisionSupersedes")
+
+  authorId String
+  // RENAME THIS FIELD:
+  schoolId String
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  implementedAt DateTime?
+
+  // UPDATE INDEXES TO USE schoolId:
+  @@index([schoolId, status])
+  @@index([createdAt])
+}
+
+enum DecisionStatus {
+  PROPOSED
+  ACCEPTED
+  IMPLEMENTED
+  SUPERSEDED
+}

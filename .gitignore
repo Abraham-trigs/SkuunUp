@@ -20,7 +20,9 @@
 # production
 /build
 
-# ford-school
+# Build
+/generated
+
 /lib/
 /lib/jwt
 
