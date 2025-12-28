@@ -82,7 +82,8 @@ export async function PUT(
 
     return NextResponse.json(updatedClass);
   } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 });
+    // FIXED: Use .issues instead of .errors for Zod v4 compatibility
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 });
     return NextResponse.json({ error: err.message || "Failed to update class" }, { status: 500 });
   }
 }
@@ -120,26 +121,3 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to delete class", detail: err.message }, { status: 500 });
   }
 }
-
-/*
-Design reasoning:
-- Argument-free SchoolAccount.init() ensures multi-tenant access control
-- GET returns full class with staff/students enriched with full names
-- PUT allows safe name updates only, grades preserved
-- DELETE detaches all relations and preserves historical data before deleting the class
-
-Structure:
-- GET() → read full class
-- PUT() → update class fields
-- DELETE() → detach relations and remove class atomically
-
-Implementation guidance:
-- Frontend can call GET/PUT/DELETE using dynamic [classId] param
-- Zod validation prevents invalid updates
-- Transactions ensure consistent state for DELETE
-
-Scalability insight:
-- Supports large class relations without deleting critical historical data
-- Future-proof for additional relations or audit logs
-- Full multi-tenant safety for multi-school deployments
-*/
