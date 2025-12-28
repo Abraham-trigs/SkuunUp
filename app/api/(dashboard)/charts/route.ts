@@ -5,19 +5,24 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 
-// Helper: format Date to YYYY-MM-DD
-const formatDate = (date: Date) => date.toISOString().split("T")[0];
+// -------------------- Helpers --------------------
+
+// Format Date to YYYY-MM-DD (UTC-safe for charting)
+function formatDate(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
 
 // -------------------- GET Dashboard Charts --------------------
 export async function GET() {
   try {
     // Auth & school scoping
     const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount)
+    if (!schoolAccount) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // Fetch classes for this school with student counts
-    const studentsPerClass = await prisma.class.findMany({
+    // -------------------- Classes + student counts --------------------
+    const classes = await prisma.class.findMany({
       where: { schoolId: schoolAccount.schoolId },
       select: {
         id: true,
@@ -26,67 +31,104 @@ export async function GET() {
       },
     });
 
-    // Attendance trend: last 30 days
+    const classIds = classes.map((c) => c.id);
+
+    // Short-circuit if school has no classes
+    if (classIds.length === 0) {
+      return NextResponse.json({
+        studentsPerClass: [],
+        attendanceTrend: [],
+      });
+    }
+
+    // -------------------- Attendance trend (last 30 days) --------------------
     const today = new Date();
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 29);
 
+    /**
+     * IMPORTANT:
+     * Prisma groupBy does NOT allow relation traversal.
+     * We scope by school using classId IN (…) instead.
+     */
     const attendances = await prisma.studentAttendance.groupBy({
       by: ["classId", "date"],
       where: {
-        class: { schoolId: schoolAccount.schoolId },
+        classId: { in: classIds },
         date: { gte: thirtyDaysAgo },
         status: "PRESENT",
       },
       _count: { id: true },
     });
 
-    // Map attendances for O(1) lookup
+    // -------------------- Build lookup map --------------------
     const attendanceMap: Record<string, Record<string, number>> = {};
-    attendances.forEach((a) => {
-      const classId = a.classId;
-      const dateStr = formatDate(a.date);
-      if (!attendanceMap[classId]) attendanceMap[classId] = {};
-      attendanceMap[classId][dateStr] = a._count.id;
-    });
 
-    // Build trend per class with zero-filling
-    const attendanceTrend = studentsPerClass.map((c) => {
-      const trendData = Array.from({ length: 30 }).map((_, i) => {
-        const date = formatDate(new Date(thirtyDaysAgo.getTime() + i * 24 * 60 * 60 * 1000));
-        return { date, presentCount: attendanceMap[c.id]?.[date] ?? 0 };
+    for (const row of attendances) {
+      const classId = row.classId;
+      const dateKey = formatDate(row.date);
+
+      if (!attendanceMap[classId]) {
+        attendanceMap[classId] = {};
+      }
+
+      attendanceMap[classId][dateKey] = row._count.id;
+    }
+
+    // -------------------- Zero-filled trend per class --------------------
+    const attendanceTrend = classes.map((cls) => {
+      const data = Array.from({ length: 30 }).map((_, i) => {
+        const date = new Date(thirtyDaysAgo);
+        date.setDate(thirtyDaysAgo.getDate() + i);
+        const dateKey = formatDate(date);
+
+        return {
+          date: dateKey,
+          presentCount: attendanceMap[cls.id]?.[dateKey] ?? 0,
+        };
       });
-      return { className: c.name, data: trendData };
+
+      return {
+        className: cls.name,
+        data,
+      };
     });
 
+    // -------------------- Response --------------------
     return NextResponse.json({
-      studentsPerClass: studentsPerClass.map((c) => ({ className: c.name, count: c._count.students })),
+      studentsPerClass: classes.map((c) => ({
+        className: c.name,
+        count: c._count.students,
+      })),
       attendanceTrend,
     });
   } catch (err: any) {
     console.error("Charts API error:", err);
-    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || "Server error" },
+      { status: 500 }
+    );
   }
 }
 
 /*
 Design reasoning:
-- SchoolAccount ensures multi-tenant isolation
-- Attendance trend zero-filling simplifies frontend rendering
-- Typed and scoped to prevent cross-school data leaks
+- Prisma groupBy forbids relation traversal; classId scoping preserves correctness
+- SchoolAccount enforces tenant isolation at the boundary
+- Zero-filled attendance trends simplify frontend chart rendering
 
 Structure:
-- GET(): main handler
-- Maps class counts and attendance trends in a single response
-- Attendance grouped via Prisma.groupBy for efficiency
+- GET(): single dashboard aggregation endpoint
+- Stepwise data resolution: classes → IDs → grouped attendance → mapped trends
+- Explicit short-circuit for empty schools
 
 Implementation guidance:
-- Drop into /app/api/(dashboard)/charts
-- Frontend can use studentsPerClass for summary cards and attendanceTrend for chart plotting
-- Handles 401 and 500 errors consistently
+- Drop-in replacement for /app/api/(dashboard)/charts
+- Frontend consumes studentsPerClass for summary cards
+- attendanceTrend is chart-ready with stable date keys
 
 Scalability insight:
-- Can add optional query params (classId, date range) with Zod validation
-- Efficient for large schools via groupBy
-- Future enhancements: caching or pre-aggregated attendance tables
+- Scales linearly with number of classes, not students
+- Easy to add date-range or classId filters with Zod
+- Can be cached or backed by pre-aggregated tables if traffic grows
 */
