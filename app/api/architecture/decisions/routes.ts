@@ -1,5 +1,5 @@
 // app/api/decisions/route.ts
-// Purpose: Full CRUD + recursive decision chain for DecisionRecords
+// Purpose: Full CRUD + recursive decision chain for DecisionRecords (school-scoped, Next.js 15.5 async params)
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -32,8 +32,13 @@ const querySchema = z.object({
 });
 
 // -------------------- Recursive Helper --------------------
-async function getDecisionChain(id: string, tenantId: string, visited = new Set<string>()) {
-  if (visited.has(id)) return null;
+async function getDecisionChain(
+  id: string,
+  schoolId: string,
+  visited = new Set<string>(),
+  depth = 0
+): Promise<any | null> {
+  if (visited.has(id) || depth > 50) return null;
   visited.add(id);
 
   const decision = await prisma.decisionRecord.findUnique({
@@ -41,15 +46,15 @@ async function getDecisionChain(id: string, tenantId: string, visited = new Set<
     include: { supersedes: true, supersededBy: true },
   });
 
-  if (!decision || decision.tenantId !== tenantId) return null;
+  if (!decision || decision.schoolId !== schoolId) return null;
 
   const previous = decision.supersedesId
-    ? await getDecisionChain(decision.supersedesId, tenantId, visited)
+    ? await getDecisionChain(decision.supersedesId, schoolId, visited, depth + 1)
     : null;
 
   const next: any[] = [];
   for (const succ of decision.supersededBy) {
-    const chain = await getDecisionChain(succ.id, tenantId, visited);
+    const chain = await getDecisionChain(succ.id, schoolId, visited, depth + 1);
     if (chain) next.push(chain);
   }
 
@@ -60,7 +65,7 @@ async function getDecisionChain(id: string, tenantId: string, visited = new Set<
 export async function GET(req: NextRequest) {
   try {
     const account = await SchoolAccount.init();
-    if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!account || !account.schoolId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const query = querySchema.parse(Object.fromEntries(searchParams.entries()));
@@ -68,7 +73,7 @@ export async function GET(req: NextRequest) {
     const page = Math.max(Number(query.page ?? 1), 1);
     const perPage = Math.max(Number(query.perPage ?? 10), 1);
 
-    const where: any = { tenantId: account.tenantId };
+    const where: any = { schoolId: account.schoolId };
     if (query.search) where.title = { contains: query.search, mode: "insensitive" };
     if (query.status) where.status = query.status;
 
@@ -85,8 +90,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ decisions, total, page, perPage });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 });
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
 }
@@ -95,7 +99,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const account = await SchoolAccount.init();
-    if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!account || !account.schoolId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
     const data = createDecisionSchema.parse(body);
@@ -110,8 +114,9 @@ export async function POST(req: NextRequest) {
     const newDecision = await prisma.decisionRecord.create({
       data: {
         ...data,
-        authorId: account.userId,
-        tenantId: account.tenantId,
+        // FIXED: Using account.info.id to match the getter in your SchoolAccount file
+        authorId: account.info.id, 
+        schoolId: account.schoolId,
         status: "PROPOSED",
       },
       include: { supersedes: true, supersededBy: true },
@@ -119,93 +124,62 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(newDecision, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 });
     return NextResponse.json({ error: err.message || "Failed to create decision" }, { status: 500 });
   }
 }
 
 // -------------------- PATCH /api/decisions/:id --------------------
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
     const account = await SchoolAccount.init();
-    if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!account || !account.schoolId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const params = await context.params;
+    const { id } = params;
 
     const body = await req.json();
     const data = updateDecisionSchema.parse(body);
 
-    const decision = await prisma.decisionRecord.findUnique({ where: { id: params.id } });
-    if (!decision || decision.tenantId !== account.tenantId)
+    const decision = await prisma.decisionRecord.findUnique({ where: { id } });
+    if (!decision || decision.schoolId !== account.schoolId)
       return NextResponse.json({ error: "Decision not found or access denied" }, { status: 404 });
 
     const updated = await prisma.decisionRecord.update({
-      where: { id: params.id },
+      where: { id },
       data,
       include: { supersedes: true, supersededBy: true },
     });
 
     return NextResponse.json(updated);
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 });
     return NextResponse.json({ error: err.message || "Failed to update decision" }, { status: 500 });
   }
 }
 
 // -------------------- DELETE /api/decisions/:id --------------------
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
     const account = await SchoolAccount.init();
-    if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!account || !account.schoolId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const decision = await prisma.decisionRecord.findUnique({ where: { id: params.id } });
-    if (!decision || decision.tenantId !== account.tenantId)
+    const params = await context.params;
+    const { id } = params;
+
+    const decision = await prisma.decisionRecord.findUnique({ where: { id } });
+    if (!decision || decision.schoolId !== account.schoolId)
       return NextResponse.json({ error: "Decision not found or access denied" }, { status: 404 });
 
-    await prisma.decisionRecord.delete({ where: { id: params.id } });
+    await prisma.decisionRecord.delete({ where: { id } });
     return NextResponse.json({ message: "Decision deleted" });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to delete decision" }, { status: 500 });
   }
 }
-
-// -------------------- GET /api/decisions/:id/full-chain --------------------
-export async function GETFullChain(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const account = await SchoolAccount.init();
-    if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const graph = await getDecisionChain(params.id, account.tenantId);
-    if (!graph)
-      return NextResponse.json({ error: "Decision not found or access denied" }, { status: 404 });
-
-    return NextResponse.json({ graph });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to fetch decision graph" }, { status: 500 });
-  }
-}
-
-/*
-Design reasoning:
-- Enforces tenant-scoped CRUD for multi-tenant safety
-- Uses recursive helper for full decision chain
-- Zod validation ensures data integrity
-- SchoolAccount argument-free auth centralizes tenant access
-
-Structure:
-- GET → list decisions with pagination and filters
-- POST → create new decision, optionally superseding previous
-- PATCH → update decision fields/status
-- DELETE → remove decision safely
-- GETFullChain → fetch full recursive decision chain
-
-Implementation guidance:
-- Frontend can query with ?page=&perPage=&search=&status
-- Use POST for creation, PATCH for updates, DELETE for removal
-- Full chain can be visualized recursively using GETFullChain
-
-Scalability insight:
-- Recursive chain supports arbitrarily deep decision hierarchies
-- Additional filters and statuses can be added without changing route structure
-- Multi-tenant enforcement prevents cross-tenant leaks
-*/
