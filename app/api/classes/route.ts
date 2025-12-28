@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 
 // -------------------- Schemas --------------------
 const createClassSchema = z.object({
@@ -23,12 +24,13 @@ const querySchema = z.object({
 
 // -------------------- Helper --------------------
 function addFullNameToUsers<
-  T extends { user: { firstName?: string; surname?: string; otherNames?: string } }
+  T extends { user: { firstName?: string; surname?: string; otherNames?: string | null } }
 >(items: T[]) {
   return items.map((x) => ({
     ...x,
     user: {
       ...x.user,
+      // Boolean filter handles null, undefined, or empty strings correctly
       fullName: [x.user.firstName, x.user.surname, x.user.otherNames].filter(Boolean).join(" "),
     },
   }));
@@ -37,19 +39,20 @@ function addFullNameToUsers<
 // -------------------- GET Classes --------------------
 export async function GET(req: NextRequest) {
   try {
-    // Authenticate school
     const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount)
+    
+    // FIXED: Use correct schoolAccount variable name
+    if (!schoolAccount || !schoolAccount.schoolId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // Parse query params with validation and normalization
     const { searchParams } = new URL(req.url);
     const query = querySchema.parse(Object.fromEntries(searchParams.entries()));
     const page = Math.max(Number(query.page ?? 1), 1);
     const perPage = Math.max(Number(query.perPage ?? 10), 1);
 
-    // Build Prisma where clause scoped to school
-    const where: Parameters<typeof prisma.class.findMany>[0]["where"] = {
+    // FIXED: Use Prisma.ClassWhereInput to ensure proper property access during build
+    const where: Prisma.ClassWhereInput = {
       schoolId: schoolAccount.schoolId,
       ...(query.search ? { name: { contains: query.search, mode: "insensitive" } } : {}),
       ...(query.staffId ? { staff: { some: { id: query.staffId } } } : {}),
@@ -96,9 +99,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ classes: classesWithFullNames, total, page, perPage });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
-
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.issues }, { status: 400 });
+    }
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
 }
@@ -107,8 +110,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount)
+    if (!schoolAccount || !schoolAccount.schoolId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await req.json();
     const data = createClassSchema.parse(body);
@@ -124,31 +128,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(newClass, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
-
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.issues }, { status: 400 });
+    }
     return NextResponse.json({ error: err.message || "Failed to create class" }, { status: 500 });
   }
 }
-
-/*
-Design reasoning:
-- Uses argument-free SchoolAccount.init() to enforce multi-tenant data access
-- GET supports search, staff/subject/exam/student filters, and pagination
-- POST creates default grades for new classes to simplify setup
-
-Structure:
-- GET() → fetch paginated classes with full relations
-- POST() → create a new class for the authenticated school
-- Helper addFullNameToUsers() formats staff/student names consistently
-
-Implementation guidance:
-- Drop this file into /app/api/classes
-- Frontend can query GET with ?page=&perPage=&search=&staffId=&subjectId=&examId=&studentId=
-- POST expects { name: string } payload; returns new class with grades
-
-Scalability insight:
-- Flexible filters allow addition of new relations without changing core logic
-- Pagination scales to thousands of classes
-- Can add caching or batch-loading of related entities without breaking API contract
-*/
