@@ -1,91 +1,43 @@
-// app/api/admissions/route.ts
-// Purpose: Handle Step 0 of student admission (create user, student, application)
+// lib/helpers/admission.ts
+// Purpose: Zod schemas for multi-step student admission
 
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db.ts";
-import { SchoolAccount } from "@/lib/schoolAccount.ts";
-import { StepSchemas } from "@/lib/helpers/admission.ts";
 import { z } from "zod";
 
-// -------------------- POST Admission --------------------
-export async function POST(req: NextRequest) {
-  try {
-    // Auth: argument-free SchoolAccount pattern
-    const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+// -------------------- Step 0: User creation --------------------
+export const StepSchemas = [
+  z.object({
+    // ---- Personal Information (authoritative) ----
+    firstName: z.string().min(1, "First name is required"),
+    surname: z.string().min(1, "Surname is required"),
+    otherNames: z.string().optional(),
 
-    const body = await req.json();
+    // ---- Auth ----
+    email: z.string().email("Valid email is required"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
 
-    // Normalize step index
-    const stepIndex = body.step ?? 0;
-    if (stepIndex !== 0)
-      return NextResponse.json({ error: "POST is only allowed for Step 0" }, { status: 400 });
+    // ---- Step metadata ----
+    step: z.literal(0).optional(), // optional because normalized server-side
 
-    // Validate body with Zod schema for Step 0
-    const validatedData = StepSchemas[0].parse(body);
-
-    // Transaction: create user, student, and application
-    const admission = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          ...validatedData,
-          role: "STUDENT",
-          schoolId: schoolAccount.schoolId,
-        },
-      });
-
-      const student = await tx.student.create({
-        data: {
-          userId: user.id,
-          schoolId: schoolAccount.schoolId,
-          enrolledAt: new Date(),
-        },
-      });
-
-      const app = await tx.application.create({
-        data: {
-          userId: user.id,
-          studentId: student.id,
-          schoolId: schoolAccount.schoolId,
-          status: "DRAFT",
-          progress: 0,
-        },
-      });
-
-      // Return fully hydrated application
-      return tx.application.findUnique({ where: { id: app.id } });
-    });
-
-    return NextResponse.json({ success: true, admission }, { status: 201 });
-  } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
-
-    console.error("POST /admissions error:", err);
-    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
-  }
-}
+    // ---- Optional: class selection or other fields for Step 0 ----
+    classId: z.string().optional(),
+  }),
+  // Step 1, Step 2, ... can be added here
+] as const;
 
 /*
 Design reasoning:
-- Uses argument-free SchoolAccount.init() for auth and school scoping
-- Validates Step 0 input using Zod for safe data creation
-- Transaction ensures user, student, and application are created atomically
-
-Structure:
-- POST(): main handler
-- Step index enforced
-- Zod validation for request body
-- Prisma $transaction for multi-step writes
+- Step 0 schema now fully matches the Prisma User model
+- Optional fields like otherNames and classId allow flexible input
+- step property is optional because server normalizes it
+- Ensures TypeScript + Prisma type-safety in POST /admissions
 
 Implementation guidance:
-- Drop into /app/api/admissions
-- Frontend must send step=0 payload
-- Returns 201 on success with full application
+- Import StepSchemas in admissions route
+- Use StepSchemas[0].parse(body) for validation
+- Guarantees all required fields are present for Prisma create()
 
 Scalability insight:
-- Can add Step 1+ handling by extending StepSchemas array
-- Atomic transaction prevents partial writes
-- 401/400/500 handling protects UX and data integrity
+- Adding Step 1+ is as simple as pushing a new Zod schema into the array
+- Type-safe, prevents missing required fields
+- Optional fields provide backward compatibility with partial forms
 */
