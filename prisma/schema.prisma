@@ -98,12 +98,12 @@ model User {
 // Models to capture student admission application form data with indexes.
 
 model Student {
-  id       String @id @default(cuid())
-  userId   String @unique
-  user     User   @relation(fields: [userId], references: [id])
-  name      String?
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id])
+  name     String?
   schoolId String
-  school   School @relation(fields: [schoolId], references: [id])
+  school   School  @relation(fields: [schoolId], references: [id])
 
   subjects          Subject[]           @relation("StudentSubjects")
   application       Application?        @relation("StudentApplication")
@@ -819,13 +819,15 @@ model DecisionRecord {
   supersededBy DecisionRecord[] @relation("DecisionSupersedes")
 
   authorId String
-  tenantId String
+  // RENAME THIS FIELD:
+  schoolId String
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   implementedAt DateTime?
 
-  @@index([tenantId, status])
+  // UPDATE INDEXES TO USE schoolId:
+  @@index([schoolId, status])
   @@index([createdAt])
 }
 

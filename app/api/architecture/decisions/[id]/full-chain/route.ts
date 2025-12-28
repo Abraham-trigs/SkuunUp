@@ -1,44 +1,51 @@
-// app/api/decisions/[id]/full-chain/route.ts
-// Purpose: Fetch the full decision chain recursively for a given decision ID
-
+// app/api/architecture/decisions/[id]/full-chain/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
+import { z } from "zod";
 
 // -------------------- Types --------------------
 interface DecisionGraph {
   id: string;
   title: string;
-  content?: string | null;
+  context: string;
   supersedes: DecisionGraph | null;
   supersededBy: DecisionGraph[];
-  [key: string]: any; // preserve additional Prisma fields
+  [key: string]: any;
 }
+
+// -------------------- Zod Schemas --------------------
+const paramsSchema = z.object({
+  id: z.string().cuid("Invalid decision ID"), 
+});
 
 // -------------------- Recursive helper --------------------
 async function getFullDecisionGraph(
   id: string,
-  tenantId: string,
+  schoolId: string,
   visited = new Set<string>(),
   depth = 0
 ): Promise<DecisionGraph | null> {
-  if (visited.has(id) || depth > 50) return null; // prevent cycles and excessive recursion
+  if (visited.has(id) || depth > 50) return null;
   visited.add(id);
 
   const decision = await prisma.decisionRecord.findUnique({
     where: { id },
-    include: { supersedes: true, supersededBy: true },
+    include: {
+      supersededBy: { select: { id: true } }
+    },
   });
 
-  if (!decision || decision.tenantId !== tenantId) return null;
+  // Verify existence and multi-tenant isolation using schoolId
+  if (!decision || decision.schoolId !== schoolId) return null;
 
   const previous = decision.supersedesId
-    ? await getFullDecisionGraph(decision.supersedesId, tenantId, visited, depth + 1)
+    ? await getFullDecisionGraph(decision.supersedesId, schoolId, visited, depth + 1)
     : null;
 
   const next: DecisionGraph[] = [];
   for (const succ of decision.supersededBy) {
-    const chain = await getFullDecisionGraph(succ.id, tenantId, visited, depth + 1);
+    const chain = await getFullDecisionGraph(succ.id, schoolId, visited, depth + 1);
     if (chain) next.push(chain);
   }
 
@@ -52,50 +59,38 @@ async function getFullDecisionGraph(
 // -------------------- GET /api/decisions/:id/full-chain --------------------
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> } // Required for Next.js 15
 ) {
   try {
     const account = await SchoolAccount.init();
-    if (!account)
+    if (!account || !account.schoolId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const { id } = params;
+    // Await params for Next.js 15 compatibility
+    const params = await context.params;
+    const { id } = paramsSchema.parse(params);
 
-    const graph = await getFullDecisionGraph(id, account.tenantId);
+    const graph = await getFullDecisionGraph(id, account.schoolId);
 
-    if (!graph)
+    if (!graph) {
       return NextResponse.json(
         { error: "Decision not found or access denied" },
         { status: 404 }
       );
+    }
 
     return NextResponse.json({ graph });
   } catch (err: any) {
-    console.error("GET /decisions/:id/full-chain error:", err);
+    // FIXED: Use .issues instead of .errors for Zod v4 compatibility
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.issues }, { status: 400 });
+    }
+
+    console.error("GET Decision Graph Error:", err);
     return NextResponse.json(
-      { error: err.message || "Failed to fetch decision graph" },
+      { error: "Failed to fetch decision graph" },
       { status: 500 }
     );
   }
 }
-
-/*
-Design reasoning:
-- Recursively fetches decision chain (supersedes and supersededBy)
-- SchoolAccount ensures multi-tenant access
-- Recursion depth and cycle detection prevent infinite loops
-
-Structure:
-- GET() → main handler
-- getFullDecisionGraph() → recursive helper for full chain
-- Typed interface ensures consistent return shape
-
-Implementation guidance:
-- Drop into /api/decisions/[id]/full-chain
-- Frontend fetches with authenticated tenant context
-- Safe for large chains with depth limit
-
-Scalability insight:
-- Can extend to include filters, partial graph fetching, or caching
-- Multi-tenant safety and cycle detection ensure secure, stable recursion
-*/
