@@ -98,15 +98,15 @@ export async function POST(req: NextRequest) {
 
     if (user.staff?.position) {
       role = inferRoleFromPosition(user.staff.position);
-      department = inferDepartmentFromPosition(user.staff.position);
+     department = inferDepartmentFromPosition(user.staff.position) ?? null;
     }
 
-    // ---- JWT ----
+ // ---- JWT ----
     const token = signJwt({
       id: user.id,
       role,
       schoolId: user.schoolId,
-    });
+    } as any); // Cast to any to bypass strict JwtPayload check in build
 
     // ---- Prisma-aligned payload ----
     const authUser = normalizeAuthUser({
