@@ -43,17 +43,18 @@ export async function GET(req: NextRequest) {
     const perPage = Math.max(Number(query.perPage ?? 10), 1);
     const skip = (page - 1) * perPage;
 
+    // FIXED: Filter schoolId through the nested user relation
     const where: Prisma.StaffWhereInput = {
-      schoolId: schoolAccount.schoolId,
-      user: search
-        ? {
-            OR: [
-              { firstName: { contains: search, mode: "insensitive" } },
-              { surname: { contains: search, mode: "insensitive" } },
-              { otherNames: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : undefined,
+      user: {
+        schoolId: schoolAccount.schoolId,
+        ...(search ? {
+          OR: [
+            { firstName: { contains: search, mode: "insensitive" } },
+            { surname: { contains: search, mode: "insensitive" } },
+            { otherNames: { contains: search, mode: "insensitive" } },
+          ],
+        } : {}),
+      },
     };
 
     const [total, staffList] = await prisma.$transaction([
@@ -84,7 +85,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = staffCreateSchema.parse(body);
 
-    // Ensure user exists and belongs to the same school
     const user = await prisma.user.findUnique({ where: { id: parsed.userId } });
     if (!user || user.schoolId !== schoolAccount.schoolId)
       return NextResponse.json({ error: "Invalid user" }, { status: 400 });
@@ -97,39 +97,19 @@ export async function POST(req: NextRequest) {
         classId: parsed.classId,
         salary: parsed.salary,
         hireDate: parsed.hireDate ? new Date(parsed.hireDate) : undefined,
-        schoolId: schoolAccount.schoolId,
+        // FIXED: Removed schoolId from staff data as it resides in the User model
       },
       include: { user: true, class: true, department: true, subjects: true },
     });
 
     return NextResponse.json(staff, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+    if (err instanceof z.ZodError) {
+      // FIXED: Switched from .errors to .issues for 2025 Zod compatibility
+      return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
+    }
 
     console.error("POST /staff error:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
-
-/*
-Design reasoning:
-- Auth is argument-free via SchoolAccount.init() for multi-tenant safety
-- GET supports search across firstName, surname, otherNames
-- POST validates user exists and belongs to the same school
-- Pagination and DTO structure consistent for frontend
-
-Structure:
-- GET → list staff with filters, pagination
-- POST → create staff atomically
-
-Implementation guidance:
-- Drop into /app/api/staff
-- Frontend can query with ?search=&page=&perPage=
-- Returns 401, 400, 500 consistently
-
-Scalability insight:
-- Can extend filters (department, classId) easily
-- Transactional safety allows multiple staff creations safely
-- DTO ready for frontend tables, optimized for large datasets
-*/
