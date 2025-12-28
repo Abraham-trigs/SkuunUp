@@ -16,7 +16,6 @@ export default function PromptBanner() {
       setTimeout(() => setVisible(false), showDuration);
     };
 
-    // Start initial cycle
     cycle();
     const interval = setInterval(cycle, cycleDuration);
 
@@ -25,30 +24,33 @@ export default function PromptBanner() {
 
   return (
     <motion.div
-      animate={{ opacity: visible ? 0 : 30 }}
+      // Fixed: Opacity must be between 0 and 1.
+      animate={{ opacity: visible ? 1 : 0 }}
       transition={{ duration: 1, ease: "easeInOut" }}
-      className="w-full bg-transparent text-center py-4 mt-4 pointer-events-none"
+      className="w-full bg-transparent text-center py-4 mt-4 pointer-events-none select-none"
     >
       <motion.h2
         initial={{ y: 10, opacity: 0 }}
-        animate={{ y: 0, opacity: visible ? 0 : 30 }}
+        animate={{ y: 0, opacity: visible ? 1 : 0 }}
         transition={{ delay: 0.3, duration: 0.8 }}
-        className="w-full text-xl md:text-2xl font-semibold text-[var(--ford-card)]"
+        // Updated to ark-deepblue for high-readability branding
+        className="w-full text-xl md:text-2xl font-bold text-ark-deepblue tracking-tight"
       >
         View your child’s progress, anytime
       </motion.h2>
 
       <motion.div
-        animate={{ opacity: visible ? 0 : 30 }}
+        animate={{ opacity: visible ? 1 : 0 }}
         transition={{
           delay: 1.2,
           duration: 0.6,
           repeat: visible ? Infinity : 0,
           repeatType: "reverse",
         }}
-        className="flex justify-center mt-2 text-[var(--ford-secondary)]"
+        // Updated to ark-red to draw attention to the prompt
+        className="flex justify-center mt-2 text-ark-red"
       >
-        <FaHandPointDown className="w-6 h-6 animate-bounce" />
+        <FaHandPointDown className="w-8 h-8 animate-bounce" />
       </motion.div>
     </motion.div>
   );

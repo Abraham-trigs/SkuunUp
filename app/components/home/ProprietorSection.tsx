@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 
 const traitsData = [
   {
     name: "Leader",
     color: "text-white",
-    bg: "bg-[var(--ford-primary)]",
-    underlineColor: "bg-[var(--ford-primary)]",
+    bg: "bg-ark-navy",
     description: `As a Leader, Hon. Clifford Martey Kortey drives FORD School towards excellence.
 He ensures that the school operates efficiently, inspires staff with clear vision, and sets high standards for academic and extracurricular achievements.
 His leadership fosters a culture of accountability and innovation, guiding students to become responsible, future-ready citizens.
@@ -17,9 +16,8 @@ Parents and the community trust his direction, knowing that their children are i
   },
   {
     name: "Proprietor",
-    color: "text-[var(--typo)]",
-    bg: "bg-[var(--ford-secondary)]",
-    underlineColor: "bg-[var(--ford-secondary)]",
+    color: "text-white",
+    bg: "bg-ark-deepblue",
     description: `As Proprietor, he oversees the school's overall operations and long-term strategy.
 He ensures that all facilities, curriculum development, and teacher training meet top-notch standards.
 His decisions impact students’ learning environment, enhance staff performance, and maintain the school's reputation among parents and the wider community.`,
@@ -27,17 +25,15 @@ His decisions impact students’ learning environment, enhance staff performance
   {
     name: "Father",
     color: "text-white",
-    bg: "bg-[var(--success)]",
-    underlineColor: "bg-[var(--success)]",
+    bg: "bg-ark-red",
     description: `As a Father figure, Hon. Clifford Martey Kortey nurtures students individually, supporting their growth academically, socially, and emotionally.
 He mentors teachers, offers guidance to parents, and creates a caring environment that values each child.
 His presence instills a sense of safety, trust, and personal attention for every student at FORD School.`,
   },
   {
     name: "Friendly",
-    color: "text-white",
-    bg: "bg-[var(--info)]",
-    underlineColor: "bg-[var(--info)]",
+    color: "text-ark-navy",
+    bg: "bg-ark-cyan",
     description: `Known for his Friendly nature, he is approachable to students, staff, and parents alike.
 He maintains open communication channels with the community and encourages collaboration across all stakeholders.
 His warmth and empathy strengthen relationships and make the school feel like a welcoming, inclusive family for everyone.`,
@@ -46,117 +42,105 @@ His warmth and empathy strengthen relationships and make the school feel like a 
 
 export default function ProprietorSection() {
   const [activeTrait, setActiveTrait] = useState(traitsData[0]);
-  const [underlineStyle, setUnderlineStyle] = useState({ left: 0, width: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
-  const buttonsRef = useRef<(HTMLButtonElement | null)[]>([]);
-
-  useEffect(() => {
-    const index = traitsData.findIndex((t) => t.name === activeTrait.name);
-    const btn = buttonsRef.current[index];
-    if (btn && containerRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const btnRect = btn.getBoundingClientRect();
-      setUnderlineStyle({
-        left: btnRect.left - containerRect.left,
-        width: btnRect.width,
-      });
-    }
-  }, [activeTrait]);
 
   return (
-    <section className="relative w-screen bg-[var(--ford-secondary)] py-24 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 md:px-10 flex flex-col md:flex-row items-center gap-12 text-[var(--typo)]">
-        {/* Image */}
+    <section className="relative w-full bg-white py-24 overflow-hidden">
+      {/* Brand Background Accent */}
+      <div className="absolute top-0 right-0 w-1/3 h-full bg-ark-lightblue/10 -skew-x-12 translate-x-20 pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto px-6 md:px-10 flex flex-col md:flex-row items-center gap-16">
+        {/* Image Container - Using standard scale units (w-72, h-96, w-96, h-128) to prevent editor underlines */}
         <motion.div
-          initial={{ opacity: 0, x: -50 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="w-full md:w-1/2 flex justify-center"
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8 }}
+          className="w-full md:w-1/2 flex justify-center relative"
         >
-          <div className="relative w-[320px] h-[400px] md:w-[380px] md:h-[460px] rounded-3xl overflow-hidden shadow-2xl border border-[var(--ford-secondary)] hover:scale-105 transition-transform duration-500">
-            <Image
-              src="/proprietor.webp"
-              alt="Hon. Clifford Martey Kortey - Proprietor"
-              width={1920}
-              height={1444}
-              priority
-              className="object-cover w-full h-full"
-            />
-            <div className="absolute inset-0 ring-1 ring-[var(--ford-primary)] rounded-3xl pointer-events-none"></div>
+          <div className="relative w-72 h-96 md:w-96 md:h-128 z-10">
+            {/* Decorative Frame */}
+            <div className="absolute -inset-4 border-2 border-ark-cyan rounded-3xl -rotate-3 z-0" />
+
+            {/* The Image */}
+            <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-2xl border-4 border-white z-10">
+              <Image
+                src="/proprietor.webp"
+                alt="Hon. Clifford Martey Kortey"
+                fill
+                priority
+                className="object-cover transition-transform duration-700 hover:scale-105"
+              />
+            </div>
+
+            {/* Subtle Glow */}
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-ark-red/10 rounded-full blur-2xl z-0" />
           </div>
         </motion.div>
 
         {/* Text Content */}
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.3 }}
-          className="w-full md:w-1/2 text-center md:text-left flex flex-col items-center md:items-start gap-4"
-        >
-          <motion.h2
-            variants={{
-              hidden: { opacity: 0, y: 20 },
-              visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
-            }}
-            className="text-3xl md:text-4xl font-bold text-[var(--typo)]"
+        <div className="w-full md:w-1/2 flex flex-col items-center md:items-start text-center md:text-left">
+          <motion.span
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            className="text-ark-red font-bold tracking-widest uppercase text-sm mb-2"
           >
+            Visionary Leadership
+          </motion.span>
+
+          <h2 className="text-4xl md:text-5xl font-black text-ark-navy mb-2">
             Hon. Clifford Martey Kortey
-          </motion.h2>
+          </h2>
 
-          <motion.p
-            variants={{
-              hidden: { opacity: 0, y: 10 },
-              visible: {
-                opacity: 1,
-                y: 0,
-                transition: { delay: 0.2, duration: 0.6 },
-              },
-            }}
-            className="text-[var(--ford-secondary)] mb-4 font-medium text-sm md:text-base"
-          >
-            Proprietor & Visionary Leader, FORD School Limited
-          </motion.p>
+          <p className="text-ark-deepblue/70 font-semibold mb-8 text-lg">
+            Proprietor, FORD School Limited
+          </p>
 
-          {/* Traits */}
+          {/* Traits Selector */}
           <div
             ref={containerRef}
-            className="relative flex flex-wrap justify-center md:justify-start gap-2 mb-6"
+            className="flex flex-wrap justify-center md:justify-start gap-3 mb-10"
           >
-            {traitsData.map((trait, idx) => (
-              <button
-                key={trait.name}
-                ref={(el) => (buttonsRef.current[idx] = el)}
-                onClick={() => setActiveTrait(trait)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium cursor-pointer transition-colors duration-300 ${trait.bg} ${trait.color} hover:brightness-90`}
-              >
-                {trait.name}
-              </button>
-            ))}
-
-            <motion.div
-              animate={{
-                left: underlineStyle.left,
-                width: underlineStyle.width,
-              }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className={`absolute bottom-0 h-1 rounded-full ${activeTrait.underlineColor}`}
-            />
+            {traitsData.map((trait) => {
+              const isActive = activeTrait.name === trait.name;
+              return (
+                <button
+                  key={trait.name}
+                  onClick={() => setActiveTrait(trait)}
+                  className={`px-6 py-2 rounded-full text-sm font-bold transition-all duration-300 transform active:scale-95 ${
+                    isActive
+                      ? `${trait.bg} ${trait.color} shadow-lg -translate-y-1`
+                      : "bg-ark-lightblue/20 text-ark-navy hover:bg-ark-lightblue/40"
+                  }`}
+                >
+                  {trait.name}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Description */}
-          <div className="text-sm md:text-base leading-relaxed max-w-lg text-[var(--typo-secondary)] flex flex-col gap-2">
-            {activeTrait.description.split("\n").map((line, idx) => (
-              <motion.p
-                key={idx}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 * idx, duration: 0.5 }}
+          {/* Description Box */}
+          <div className="min-h-64 w-full max-w-xl">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTrait.name}
+                initial={{ opacity: 0, x: 15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -15 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4 border-l-4 border-ark-cyan pl-6"
               >
-                {line}
-              </motion.p>
-            ))}
+                {activeTrait.description.split("\n").map((line, idx) => (
+                  <p
+                    key={idx}
+                    className="text-ark-navy/80 leading-relaxed font-medium text-base md:text-lg"
+                  >
+                    {line}
+                  </p>
+                ))}
+              </motion.div>
+            </AnimatePresence>
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );
