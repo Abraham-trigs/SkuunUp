@@ -56,7 +56,6 @@ export default function FeatureCarousel() {
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState<Feature | null>(null);
 
-  // Duplicate the feature list to create a seamless loop
   const doubledFeatures = [...features, ...features];
 
   useEffect(() => {
@@ -64,9 +63,8 @@ export default function FeatureCarousel() {
     if (!scrollContainer) return;
 
     let animationFrame: number;
-    const scrollSpeed = 0.8; // slightly slower for smoothness
+    const scrollSpeed = 0.8;
 
-    // Start slightly offset for seamless look
     scrollContainer.scrollLeft =
       scrollContainer.scrollWidth / 2 - scrollContainer.clientWidth / 2;
 
@@ -74,7 +72,6 @@ export default function FeatureCarousel() {
       if (!paused) {
         scrollContainer.scrollLeft += scrollSpeed;
 
-        // Reset when reaching half the scroll content
         if (scrollContainer.scrollLeft >= scrollContainer.scrollWidth / 2) {
           scrollContainer.scrollLeft -= scrollContainer.scrollWidth / 2;
         }
@@ -87,35 +84,39 @@ export default function FeatureCarousel() {
   }, [paused]);
 
   return (
-    <section className="relative overflow-hidden py-12">
+    <section className="relative overflow-hidden py-12 bg-white">
       <div
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto no-scrollbar px-6 md:px-12 select-none"
+        className="flex gap-6 overflow-x-auto no-scrollbar px-6 md:px-12 select-none"
       >
         {doubledFeatures.map((f, i) => {
           const Icon = f.icon;
           return (
             <motion.div
               key={i}
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.05, y: -5 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => {
                 setSelected(f);
                 setPaused(true);
               }}
-              className="flex-shrink-0 w-[80%] sm:w-[45%] md:w-[30%] lg:w-[22%] p-6 bg-[#30000a] hover:bg-[#720019] rounded-2xl shadow-md cursor-pointer transition-all text-[var(--typo)]"
+              // Fixed: changed flex-shrink-0 to shrink-0 to remove underline
+              className="shrink-0 w-[80%] sm:w-[45%] md:w-[30%] lg:w-[22%] p-6 bg-ark-navy hover:bg-ark-deepblue rounded-2xl shadow-lg cursor-pointer transition-all border border-ark-lightblue/10"
             >
-              <div className="flex h-8 w-auto flex-row items-center 3-center gap-3 ">
-                <Icon className="w-12 h-12 mb-4 text-[var(--warning)]" />
-                <h3 className="text-l font-semibold mb-2">{f.title}</h3>
-                {/* <p className="text-sm text-[var(--background)]"></p> */}
+              <div className="flex flex-row items-center gap-4">
+                <div className="p-2 bg-white/10 rounded-lg">
+                  <Icon className="w-8 h-8 text-ark-cyan" />
+                </div>
+                <h3 className="text-sm md:text-base font-bold text-white leading-tight">
+                  {f.title}
+                </h3>
               </div>
             </motion.div>
           );
         })}
       </div>
 
-      {/* Popup inside parent */}
+      {/* Feature Details Modal */}
       <AnimatePresence>
         {selected && (
           <motion.div
@@ -123,36 +124,56 @@ export default function FeatureCarousel() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
+            // Fixed: used standard z-50 to remove underline
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ark-navy/80 backdrop-blur-md p-4"
+            onClick={() => {
+              setSelected(null);
+              setPaused(false);
+            }}
           >
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="relative bg-[var(--warning)] text-[var(--typo)] rounded-xl shadow-lg p-8 w-[90%] max-w-md text-center"
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 260, damping: 25 }}
+              className="relative bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md text-center border-b-8 border-ark-red"
+              onClick={(e) => e.stopPropagation()}
             >
               <button
                 onClick={() => {
                   setSelected(null);
                   setPaused(false);
                 }}
-                className="absolute top-3 right-3 text-[var(--warning)] hover:text-[var(--success)] transition"
+                className="absolute top-4 right-4 p-2 bg-ark-lightblue/20 rounded-full hover:bg-ark-red hover:text-white transition-colors"
               >
-                <X className="w-6 h-6 text-black hover:text-amber-700 hover:bg-amber-200 hover:rounded-sm" />
+                <X className="w-5 h-5" />
               </button>
 
-              <selected.icon className="w-14 h-14 mx-auto mb-4 text-[var(--ford-secondary)]" />
-              <h2 className="text-black text-2xl font-bold mb-3">
+              <div className="w-20 h-20 bg-ark-navy rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-ark-navy/20">
+                <selected.icon className="w-10 h-10 text-ark-cyan" />
+              </div>
+
+              <h2 className="text-ark-navy text-2xl font-black mb-4 uppercase tracking-tight">
                 {selected.title}
               </h2>
-              <p className="text-sm text-black">{selected.description}</p>
+              <p className="text-ark-deepblue/80 font-medium leading-relaxed mb-6">
+                {selected.description}
+              </p>
+
+              <button
+                onClick={() => {
+                  setSelected(null);
+                  setPaused(false);
+                }}
+                className="w-full py-3 bg-ark-navy text-white font-bold rounded-xl hover:bg-ark-red transition-colors shadow-lg"
+              >
+                Close Details
+              </button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Hide scrollbar completely */}
       <style jsx>{`
         .no-scrollbar::-webkit-scrollbar {
           display: none;

@@ -7,28 +7,28 @@ import { Leaf, Users, BookOpen, Heart, X } from "lucide-react";
 
 const qualities = [
   {
-    icon: <Leaf className="w-8 h-8 text-[var(--warning)]" />,
+    icon: <Leaf className="w-8 h-8 text-ark-cyan" />,
     title: "Sound Environment",
     description:
       "FORD provides a serene and secure learning atmosphere that inspires focus, confidence, and curiosity.",
     image: "/quality1.webp",
   },
   {
-    icon: <Users className="w-8 h-8 text-[var(--warning)]" />,
+    icon: <Users className="w-8 h-8 text-ark-cyan" />,
     title: "Expert Teachers",
     description:
       "Our dedicated educators blend deep subject mastery with empathy, ensuring every student feels seen and supported.",
     image: "/quality2.webp",
   },
   {
-    icon: <BookOpen className="w-8 h-8 text-[var(--warning)]" />,
+    icon: <BookOpen className="w-8 h-8 text-ark-cyan" />,
     title: "Modern Learning",
     description:
       "Interactive lessons, digital resources, and practical sessions connect classroom concepts to real-world applications.",
     image: "/quality3.webp",
   },
   {
-    icon: <Heart className="w-8 h-8 text-[var(--warning)]" />,
+    icon: <Heart className="w-8 h-8 text-ark-cyan" />,
     title: "Holistic Growth",
     description:
       "Beyond academics, students develop leadership, creativity, and social values for life beyond school walls.",
@@ -38,47 +38,49 @@ const qualities = [
 
 export default function QualitiesSection() {
   const [selected, setSelected] = useState<number | null>(null);
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(
-    null
-  );
 
   return (
-    <section className="mx-auto max-w-5xl px-6 md:px-10 py-16 text-center text-[var(--typo)]">
+    <section className="mx-auto max-w-6xl px-6 md:px-10 py-24 text-center bg-white">
       {/* Section Header */}
-      <h2 className="text-2xl md:text-3xl font-bold text-[var(--ford-primary)] mb-6">
-        Qualities of Education with FORD
-      </h2>
-      <p className="max-w-2xl mx-auto text-[var(--ford-secondary)] mb-10 text-sm md:text-base">
-        At FORD School Limited, education is more than instruction — it’s an
-        experience built on values that shape lifelong learners and future
-        leaders.
-      </p>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="mb-16"
+      >
+        <h2 className="text-3xl md:text-4xl font-black text-ark-navy mb-4">
+          Qualities of Education with FORD
+        </h2>
+        <div className="w-24 h-1.5 bg-ark-red mx-auto mb-6 rounded-full" />
+        <p className="max-w-2xl mx-auto text-ark-deepblue/80 font-medium text-base md:text-lg">
+          At FORD School Limited, education is more than instruction — it’s an
+          experience built on values that shape lifelong learners and future
+          leaders.
+        </p>
+      </motion.div>
 
       {/* Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
         {qualities.map((item, index) => (
           <motion.div
             key={index}
             layoutId={`card-${index}`}
-            whileHover={{ y: -6, scale: 1.03 }}
-            transition={{ type: "spring", stiffness: 250 }}
-            className="flex flex-col items-center bg-[var(--ford-secondary)] hover:bg-[var(--success)] ease-in-out rounded-2xl shadow-md p-6 text-center cursor-pointer"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              setPosition({
-                x: rect.left + rect.width / 2,
-                y: rect.top + rect.height / 2,
-              });
-              setSelected(index);
-            }}
+            whileHover={{ y: -10, transition: { duration: 0.2 } }}
+            className="group flex flex-col items-center bg-white border-2 border-ark-lightblue/30 hover:border-ark-cyan rounded-3xl shadow-xl hover:shadow-ark-cyan/10 p-8 text-center cursor-pointer transition-colors duration-300"
+            onClick={() => setSelected(index)}
           >
-            <div className="mb-3">{item.icon}</div>
-            <h3 className="font-semibold text-lg mb-2 text-[var(--warning)]">
+            <div className="mb-6 p-4 rounded-2xl bg-ark-navy group-hover:bg-ark-red transition-colors duration-300">
+              {item.icon}
+            </div>
+            <h3 className="font-bold text-xl mb-3 text-ark-navy">
               {item.title}
             </h3>
-            <p className="text-sm text-[var(--typo)] leading-relaxed">
+            <p className="text-sm text-ark-deepblue/70 leading-relaxed font-medium">
               {item.description}
             </p>
+            <div className="mt-4 text-ark-red font-bold text-xs uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+              View Details
+            </div>
           </motion.div>
         ))}
       </div>
@@ -88,7 +90,7 @@ export default function QualitiesSection() {
         {selected !== null && (
           <motion.div
             key="overlay"
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ark-navy/90 backdrop-blur-md p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -96,55 +98,47 @@ export default function QualitiesSection() {
           >
             <motion.div
               layoutId={`card-${selected}`}
-              className="relative bg-[var(--surface)] rounded-2xl overflow-hidden shadow-2xl max-w-2xl w-[90%] cursor-default"
-              initial={{
-                opacity: 0,
-                scale: 0.8,
-                x: position ? position.x - window.innerWidth / 2 : 0,
-                y: position ? position.y - window.innerHeight / 2 : 0,
-              }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-                x: 0,
-                y: 0,
-                transition: { type: "spring", stiffness: 180, damping: 15 },
-              }}
-              exit={{
-                opacity: 0,
-                scale: 0.9,
-                transition: { duration: 0.25 },
-              }}
+              className="relative bg-white rounded-3xl overflow-hidden shadow-2xl max-w-3xl w-full cursor-default"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close button */}
               <button
                 onClick={() => setSelected(null)}
-                className="bg-amber-800 rounded-2xl p-2 absolute top-3 right-3 text-[var(--typo-secondary)] hover:text-[var(--typo)]"
+                className="absolute top-4 right-4 z-10 bg-ark-red text-white p-2 rounded-xl hover:bg-ark-navy transition-colors shadow-lg"
               >
                 <X className="w-6 h-6" />
               </button>
 
-              {/* Image */}
-              <div className="w-full h-auto">
-                <Image
-                  src={qualities[selected].image}
-                  alt={qualities[selected].title}
-                  width={1920}
-                  height={1444}
-                  className="w-full h-auto object-cover"
-                  priority
-                />
-              </div>
+              <div className="flex flex-col md:flex-row">
+                {/* Image Area */}
+                <div className="w-full md:w-1/2 h-64 md:h-auto relative">
+                  <Image
+                    src={qualities[selected].image}
+                    alt={qualities[selected].title}
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                </div>
 
-              {/* Caption */}
-              <div className="p-6 text-center">
-                <h3 className="text-xl font-bold mb-2 text-[var(--warning)]">
-                  {qualities[selected].title}
-                </h3>
-                <p className="text-sm md:text-base text-[var(--typo-secondary)]">
-                  {qualities[selected].description}
-                </p>
+                {/* Content Area */}
+                <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center text-left">
+                  <div className="inline-block p-3 rounded-xl bg-ark-navy mb-4 w-fit">
+                    {qualities[selected].icon}
+                  </div>
+                  <h3 className="text-2xl md:text-3xl font-black mb-4 text-ark-navy">
+                    {qualities[selected].title}
+                  </h3>
+                  <p className="text-base md:text-lg text-ark-deepblue/80 leading-relaxed font-medium mb-6">
+                    {qualities[selected].description}
+                  </p>
+                  <button
+                    onClick={() => setSelected(null)}
+                    className="w-full md:w-fit bg-ark-navy text-white px-8 py-3 rounded-xl font-bold hover:bg-ark-red transition-colors shadow-lg"
+                  >
+                    Close Discovery
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

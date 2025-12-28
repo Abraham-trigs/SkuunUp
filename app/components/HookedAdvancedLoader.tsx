@@ -5,7 +5,7 @@
 
 import React from "react";
 import { Loader2 } from "lucide-react";
-import { useAsyncAction } from "@/hooks/useAsyncAction.tsx";
+import { useAsyncAction } from "@/app/hooks/useAsyncAction";
 
 export interface HookedAdvancedLoaderProps<T = any> {
   /** Async action (API call or promise) */

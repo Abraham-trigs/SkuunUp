@@ -31,7 +31,8 @@ export default function AddClassModal({ isOpen, onClose }: AddClassModalProps) {
 
     const parsed = classSchema.safeParse({ name });
     if (!parsed.success) {
-      setError(parsed.error.errors.map((e) => e.message).join(", "));
+      // FIXED: Changed .errors to .issues to resolve TypeScript build error
+      setError(parsed.error.issues.map((e) => e.message).join(", "));
       setLoading(false);
       return;
     }
@@ -61,75 +62,58 @@ export default function AddClassModal({ isOpen, onClose }: AddClassModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div
-        style={{ backgroundColor: "#03102b", borderColor: "#1c376e" }}
-        className="border rounded-xl shadow-2xl w-full max-w-md p-6 overflow-hidden"
-      >
-        <h2 style={{ color: "#BFCDEF" }} className="text-xl font-bold mb-4">
-          Add Class
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-ark-navy border border-ark-deepblue rounded-2xl shadow-2xl w-full max-w-md p-8 overflow-hidden">
+        <h2 className="text-ark-lightblue text-2xl font-black mb-6">
+          Add New Class
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label
-              style={{ color: "#BFCDEF" }}
-              className="block text-sm font-medium mb-1"
-            >
+            <label className="block text-ark-lightblue text-sm font-bold mb-2">
               Class Name
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              style={{
-                backgroundColor: "#1c376e",
-                color: "#6BE8EF",
-                borderColor: "#BFCDEF/20",
-              }}
-              className="w-full border px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6BE8EF] placeholder:text-white/20"
+              className="w-full bg-ark-deepblue text-ark-cyan border border-ark-lightblue/20 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-ark-cyan placeholder:text-white/10 transition-all"
               placeholder="e.g. Senior Year"
               required
               autoFocus
             />
-            <p style={{ color: "#BFCDEF" }} className="opacity-60 text-xs mt-2">
-              Grades "A", "B", and "C" will be created automatically.
+            <p className="text-ark-lightblue/60 text-xs mt-3 font-medium">
+              Note: Grades "A", "B", and "C" will be generated automatically.
             </p>
           </div>
 
           {error && (
-            <p
-              style={{ color: "#E74C3C" }}
-              className="text-sm font-medium bg-[#E74C3C]/10 p-2 rounded"
-            >
-              {error}
-            </p>
+            <div className="bg-ark-red/10 border border-ark-red/20 p-3 rounded-lg">
+              <p className="text-ark-red text-xs font-bold leading-tight">
+                {error}
+              </p>
+            </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              style={{ color: "#BFCDEF" }}
-              className="px-4 py-2 rounded-lg hover:bg-white/5 transition-colors"
+              className="px-5 py-2.5 rounded-xl text-ark-lightblue font-bold hover:bg-white/5 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              style={{
-                backgroundColor: loading ? "#1c376e" : "#6BE8EF",
-                color: "#03102b",
-              }}
               className={clsx(
-                "px-6 py-2 rounded-lg font-bold transition-all active:scale-95",
+                "px-8 py-2.5 rounded-xl font-black text-ark-navy transition-all active:scale-95 shadow-lg",
                 loading
-                  ? "opacity-50 cursor-not-allowed"
-                  : "hover:brightness-110 shadow-lg shadow-[#6BE8EF]/20"
+                  ? "bg-ark-deepblue opacity-50 cursor-not-allowed"
+                  : "bg-ark-cyan hover:brightness-110 shadow-ark-cyan/20"
               )}
             >
-              {loading ? "Saving..." : "Create Class"}
+              {loading ? "Initializing..." : "Create Class"}
             </button>
           </div>
         </form>
