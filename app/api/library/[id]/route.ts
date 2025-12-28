@@ -24,64 +24,62 @@ async function assertBookOwnership(bookId: string, schoolId: string) {
 }
 
 // -------------------- PUT /:id --------------------
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> } // NEXT 15: params is a Promise
+) {
   try {
+    const { id } = await params; // Resolve async params
     const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!schoolAccount || !schoolAccount.schoolId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await req.json();
     const data = bookUpdateSchema.parse(body);
 
-    const book = await assertBookOwnership(params.id, schoolAccount.schoolId);
+    const book = await assertBookOwnership(id, schoolAccount.schoolId);
 
     const updated = await prisma.book.update({
-      where: { id: params.id },
-      data: { ...data, available: data.totalCopies ?? book.available },
+      where: { id: id },
+      data: { 
+        ...data, 
+        // If totalCopies is updated, we keep available count in sync
+        available: data.totalCopies ?? book.available 
+      },
       include: { author: true, category: true },
     });
 
     return NextResponse.json(updated, { status: 200 });
   } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.flatten().fieldErrors }, { status: 400 });
+    // FIXED: Use .issues for Zod v4 compatibility in production builds
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
+    }
+
     const status = err.message === "Forbidden" ? 403 : err.message === "Book not found" ? 404 : 500;
-    return NextResponse.json({ error: err.message }, { status });
+    return NextResponse.json({ error: err.message || "Internal Server Error" }, { status });
   }
 }
 
 // -------------------- DELETE /:id --------------------
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> } // NEXT 15: params is a Promise
+) {
   try {
+    const { id } = await params; // Resolve async params
     const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!schoolAccount || !schoolAccount.schoolId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const book = await assertBookOwnership(params.id, schoolAccount.schoolId);
+    const book = await assertBookOwnership(id, schoolAccount.schoolId);
 
     await prisma.book.delete({ where: { id: book.id } });
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err: any) {
     const status = err.message === "Forbidden" ? 403 : err.message === "Book not found" ? 404 : 500;
-    return NextResponse.json({ error: err.message }, { status });
+    return NextResponse.json({ error: err.message || "Internal Server Error" }, { status });
   }
 }
-
-/*
-Design reasoning:
-- Books are strictly scoped to the authenticated school
-- PUT allows partial updates; totalCopies updates available field
-- DELETE safely removes book only if ownership confirmed
-
-Structure:
-- PUT → update book
-- DELETE → remove book
-- Helper assertBookOwnership reduces repeated checks
-
-Implementation guidance:
-- Use NextRequest and NextResponse for App Router consistency
-- Returns 401/403/404/400/500 consistently
-- Includes related author and category for frontend
-
-Scalability insight:
-- Can extend book schema for new fields without changing route logic
-- Ownership check helper allows reuse across other library routes
-- Fully type-safe and production-ready
-*/
