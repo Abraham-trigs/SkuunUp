@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { Role } from "@prisma/client"; // Fixes the Type 'string' assignment error
 
 // ------------------- Zod schemas -------------------
 const userQuerySchema = z.object({
@@ -18,7 +19,8 @@ const createUserSchema = z.object({
   otherNames: z.string().optional(),
   email: z.string().email("Valid email required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.string().default("STUDENT"),
+  // Use nativeEnum so TypeScript knows 'role' is exactly the 'Role' enum type
+  role: z.nativeEnum(Role).default(Role.STUDENT),
 });
 
 // ------------------- POST: Create User -------------------
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     // If STUDENT, create linked student record
     let createdStudent = null;
-    if (parsed.role === "STUDENT") {
+    if (parsed.role === Role.STUDENT) {
       createdStudent = await prisma.student.create({
         data: {
           userId: createdUser.id,
@@ -61,15 +63,14 @@ export async function POST(req: NextRequest) {
           enrolledAt: new Date(),
         },
       });
-
-      // Optionally create an empty application here if needed
-      // await prisma.application.create({ data: { ... } });
     }
 
     return NextResponse.json({ user: createdUser, student: createdStudent }, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+    if (err instanceof z.ZodError) {
+      // Use .issues for structured validation error reporting
+      return NextResponse.json({ error: "Validation Error", details: err.issues }, { status: 400 });
+    }
     console.error("POST /api/users error:", err);
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
@@ -119,6 +120,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: "Query Validation Error", details: err.issues }, { status: 400 });
+    }
     console.error("GET /api/users error:", err);
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
