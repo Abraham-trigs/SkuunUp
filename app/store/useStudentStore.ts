@@ -6,11 +6,18 @@ import { useAuthStore } from "./useAuthStore";
 import { useAdmissionStore } from "../store/admissionStore.ts";
 
 // ------------------ Types ------------------
+export type StudentUser = {
+  id: string;
+  firstName: string;
+  otherNames?: string | null;
+  surname: string;
+  email: string;
+};
+
 export type StudentListItem = {
   id: string;
   userId: string;
-  name: string;
-  email: string;
+  user: StudentUser; // <-- added user object
   classId?: string | null;
   className?: string | null;
   gradeId?: string | null;
@@ -79,12 +86,7 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
   loading: false,
   errors: {},
   pagination: { page: 1, perPage: 20, total: 0, totalPages: 1 },
-  filters: {
-    search: "",
-    sortBy: "surname",
-    sortOrder: "asc",
-    page: 1,
-  },
+  filters: { search: "", sortBy: "surname", sortOrder: "asc", page: 1 },
 
   setFilters: (filters) =>
     set({ filters: { ...get().filters, ...filters } }),
@@ -103,7 +105,6 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
   fetchStudents: async (opts = {}) => {
     const { filters, pagination } = get();
     const merged = { ...filters, ...opts };
-
     set({ loading: true, errors: {} });
 
     try {
@@ -124,8 +125,22 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
         headers: { "X-School-ID": schoolId },
       });
 
+      // Map API response to include user object
+      const studentsWithUser: StudentListItem[] = res.data.students.map(
+        (s: any) => ({
+          ...s,
+          user: {
+            id: s.userId,
+            firstName: s.firstName,
+            otherNames: s.otherNames,
+            surname: s.surname,
+            email: s.email,
+          },
+        })
+      );
+
       set({
-        students: res.data.students,
+        students: studentsWithUser,
         pagination: res.data.pagination,
         filters: merged,
       });
@@ -152,7 +167,19 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
         headers: { "X-School-ID": schoolId },
       });
 
-      set({ studentDetail: res.data.student });
+      // Ensure user object exists
+      const student: StudentDetail = {
+        ...res.data.student,
+        user: {
+          id: res.data.student.userId,
+          firstName: res.data.student.firstName,
+          otherNames: res.data.student.otherNames,
+          surname: res.data.student.surname,
+          email: res.data.student.email,
+        },
+      };
+
+      set({ studentDetail: student });
     } catch (err: any) {
       set({
         errors: {
@@ -175,9 +202,7 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
       set({
         errors: {
           fetchStudentAdmission: [
-            err?.response?.data?.error ||
-              err.message ||
-              "Admission fetch failed",
+            err?.response?.data?.error || err.message || "Admission fetch failed",
           ],
         },
       });
@@ -196,11 +221,18 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
         { headers: { "X-School-ID": schoolId } }
       );
 
-      const newStudent = res.data.student;
+      const newStudent: StudentListItem = {
+        ...res.data.student,
+        user: {
+          id: res.data.student.userId,
+          firstName: res.data.student.firstName,
+          otherNames: res.data.student.otherNames,
+          surname: res.data.student.surname,
+          email: res.data.student.email,
+        },
+      };
 
-      set({
-        students: [newStudent, ...get().students],
-      });
+      set({ students: [newStudent, ...get().students] });
     } catch (err: any) {
       set({
         errors: {
@@ -223,16 +255,23 @@ export const useStudentStore = create<StudentStore>((set, get) => ({
         headers: { "X-School-ID": schoolId },
       });
 
-      const updated = res.data.student;
+      const updated: StudentListItem = {
+        ...res.data.student,
+        user: {
+          id: res.data.student.userId,
+          firstName: res.data.student.firstName,
+          otherNames: res.data.student.otherNames,
+          surname: res.data.student.surname,
+          email: res.data.student.email,
+        },
+      };
 
       set({
-        students: get().students.map((s) =>
-          s.id === updated.id ? updated : s
-        ),
+        students: get().students.map((s) => (s.id === updated.id ? updated : s)),
       });
 
       if (get().studentDetail?.id === updated.id) {
-        set({ studentDetail: updated });
+        set({ studentDetail: updated as StudentDetail });
       }
     } catch (err: any) {
       set({
