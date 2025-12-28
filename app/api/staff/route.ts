@@ -92,14 +92,11 @@ export async function POST(req: NextRequest) {
     const staff = await prisma.staff.create({
       data: {
         userId: parsed.userId,
-        // FIXED: Change 'role' to 'position' to match the Staff model
-        position: parsed.position, 
-        department: parsed.department ? {
-          connect: { id: parsed.department } 
-        } : undefined,
-        class: parsed.classId ? {
-          connect: { id: parsed.classId }
-        } : undefined,
+        position: parsed.position,
+        // FIXED: Use direct scalar fields (departmentId/classId) 
+        // as strings to match the model's optional fields.
+        departmentId: parsed.department || undefined,
+        classId: parsed.classId || undefined,
         salary: parsed.salary,
         hireDate: parsed.hireDate ? new Date(parsed.hireDate) : undefined,
       },
@@ -109,7 +106,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(staff, { status: 201 });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
+      return NextResponse.json({ 
+        error: { message: "Validation failed", details: err.issues } 
+      }, { status: 400 });
     }
     console.error("POST /staff error:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
