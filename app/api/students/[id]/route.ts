@@ -9,12 +9,12 @@ import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
 
 // ------------------ Authorization ------------------
-async function authorize(req: NextRequest) {
-  const schoolAccount = await SchoolAccount.init(req);
+async function authorize(req: NextRequest) {       
+  // FIXED: Remove 'req' to match the SchoolAccount.init() signature
+  const schoolAccount = await SchoolAccount.init();
   if (!schoolAccount) return null;
   return schoolAccount;
 }
-
 
 // ------------------ GET /api/students/:id ------------------
 export async function GET(
