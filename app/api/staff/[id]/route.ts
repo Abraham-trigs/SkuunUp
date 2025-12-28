@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 
 // -------------------- Zod schema for PUT --------------------
 const staffUpdateSchema = z.object({
@@ -28,7 +27,10 @@ export async function GET(
     const staff = await prisma.staff.findFirst({
       where: {
         id: params.id,
-        schoolId: schoolAccount.schoolId,
+        // FIXED: Filter schoolId through the nested user relation
+        user: {
+          schoolId: schoolAccount.schoolId,
+        },
       },
       include: { user: true, class: true, department: true, subjects: true },
     });
@@ -59,7 +61,10 @@ export async function PUT(
     const updated = await prisma.staff.updateMany({
       where: {
         id: params.id,
-        schoolId: schoolAccount.schoolId,
+        // FIXED: Filter schoolId through the nested user relation
+        user: {
+          schoolId: schoolAccount.schoolId,
+        },
       },
       data: parsed,
     });
@@ -75,7 +80,8 @@ export async function PUT(
     return NextResponse.json(staff, { status: 200 });
   } catch (err: any) {
     if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+      // FIXED: Switched from deprecated .errors to .issues for Zod 4.0/2025 compatibility
+      return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
 
     console.error("PUT /staff/:id error:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
@@ -93,7 +99,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const deleted = await prisma.staff.deleteMany({
-      where: { id: params.id, schoolId: schoolAccount.schoolId },
+      where: { 
+        id: params.id, 
+        // FIXED: Filter schoolId through the nested user relation
+        user: {
+          schoolId: schoolAccount.schoolId,
+        },
+      },
     });
 
     if (deleted.count === 0)
@@ -105,26 +117,3 @@ export async function DELETE(
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
-
-/*
-Design reasoning:
-- Argument-free SchoolAccount.init() for multi-tenant safety
-- GET retrieves staff with full relational data
-- PUT validates payload with Zod, ensures atomic update, and prevents unauthorized edits
-- DELETE safely removes staff only within the authenticated school
-
-Structure:
-- GET → fetch single staff
-- PUT → update single staff
-- DELETE → remove staff
-
-Implementation guidance:
-- Frontend sends PUT payload with optional fields
-- Consistent error codes: 401, 404, 400, 500
-- Transactions unnecessary for single-row updates but can be added if multi-step relations are updated
-
-Scalability insight:
-- Adding new staff fields requires only schema update
-- DTO consistent for tables and detail views
-- Maintains data integrity and avoids cross-school leaks
-*/
