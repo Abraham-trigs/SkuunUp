@@ -10,7 +10,6 @@ import { z } from "zod";
 const subjectCreateSchema = z.object({
   name: z.string().min(1, "Name is required"),
   code: z.string().min(1, "Code is required").toUpperCase(),
-  description: z.string().optional(),
 });
 
 const querySchema = z.object({
@@ -32,7 +31,7 @@ export async function GET(req: NextRequest) {
     const limit = Number(query.limit || 10);
     const search = query.search?.trim();
 
-    // FIXED: Filter schoolId via the createdBy (User) relation path
+    // Filter schoolId via the createdBy (User) relation path
     const where: any = {
       createdBy: { schoolId: schoolAccount.schoolId },
       ...(search ? {
@@ -46,7 +45,7 @@ export async function GET(req: NextRequest) {
     const [subjects, total] = await prisma.$transaction([
       prisma.subject.findMany({
         where,
-        // FIXED: Use surname and firstName to match the User model schema
+        // Use surname and firstName to match the User model schema
         include: { 
           createdBy: { 
             select: { id: true, surname: true, firstName: true, role: true } 
@@ -75,24 +74,25 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = subjectCreateSchema.parse(body);
 
-    // Check for duplicate code within the same school
+    // Check for duplicate code or name globally as per the @unique model constraint
     const existing = await prisma.subject.findFirst({
       where: { 
-        code: data.code, 
-        createdBy: { schoolId: schoolAccount.schoolId } 
+        OR: [
+          { code: data.code },
+          { name: data.name }
+        ]
       },
     });
 
-    if (existing) return NextResponse.json({ error: "Subject code already exists" }, { status: 409 });
+    if (existing) return NextResponse.json({ error: "Subject name or code already exists" }, { status: 409 });
 
     const subject = await prisma.subject.create({
       data: {
         name: data.name,
         code: data.code,
-        description: data.description,
+        // FIXED: Removed 'description' to match the Subject model
         createdById: schoolAccount.info.id,
       },
-      // FIXED: Consistently use surname/firstName for User selection
       include: { 
         createdBy: { 
           select: { id: true, surname: true, firstName: true, role: true } 
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(subject, { status: 201 });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      // FIXED: Standardized Zod error handling for 2025 Next.js build
+      // Standardized Zod error handling for 2025 Next.js build
       return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
     }
     return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
