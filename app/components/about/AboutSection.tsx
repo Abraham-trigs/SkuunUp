@@ -18,7 +18,7 @@ const topics = [
       "Our curriculum blends core academics with innovative STEAM programs, digital literacy, and global perspectives. Small class sizes and personalized attention help every student reach their full potential.",
     image: "/curriculum.webp",
     clip: "polygon(50% 0%, 100% 20%, 80% 100%, 20% 80%, 0% 20%)",
-    bubbleColors: ["#FFD700", "#FF6347", "#00CED1"],
+    bubbleColors: ["#BFCDEF", "#1c376e", "#6BE8EF"], // ark-lightblue, ark-deepblue, ark-cyan
   },
   {
     title: "Sports & Extracurriculars",
@@ -26,7 +26,7 @@ const topics = [
       "We offer a variety of sports and extracurricular programs to promote teamwork, leadership, and physical wellness. From football and athletics to arts and clubs, students explore their passions beyond the classroom.",
     image: "/sports.webp",
     clip: "polygon(40% 0%, 100% 20%, 80% 100%, 10% 80%, 0% 10%)",
-    bubbleColors: ["#32CD32", "#FF69B4", "#1E90FF"],
+    bubbleColors: ["#E74C3C", "#03102b", "#BFCDEF"], // ark-red, ark-navy, ark-lightblue
   },
   {
     title: "Nutrition & Meals",
@@ -34,7 +34,7 @@ const topics = [
       "Our cafeteria serves balanced, nutritious meals designed to fuel active minds and bodies. Special attention is given to dietary needs and wholesome, fresh ingredients, ensuring students thrive throughout the day.",
     image: "/nutrition.webp",
     clip: "polygon(50% 0%, 90% 10%, 100% 80%, 60% 100%, 20% 70%, 0% 20%)",
-    bubbleColors: ["#FFA500", "#ADFF2F", "#FF4500"],
+    bubbleColors: ["#6BE8EF", "#1c376e", "#E74C3C"], // ark-cyan, ark-deepblue, ark-red
   },
   {
     title: "Exposure & Experiences",
@@ -42,7 +42,7 @@ const topics = [
       "Students at Ford School regularly engage with state officials, industry leaders, and community influencers, gaining real-world insights. Our immersive excursions and educational trips spark curiosity, broaden perspectives, and create unforgettable experiences that extend learning beyond the classroom.",
     image: "/exposure.webp",
     clip: "polygon(45% 0%, 95% 15%, 85% 100%, 15% 85%, 0% 15%)",
-    bubbleColors: ["#FF1493", "#00FA9A", "#1E90FF"],
+    bubbleColors: ["#03102b", "#6BE8EF", "#BFCDEF"], // ark-navy, ark-cyan, ark-lightblue
   },
   {
     title: "Why Choose Ford School",
@@ -50,11 +50,10 @@ const topics = [
       "Ford School is committed to excellence, innovation, and holistic development. Our integrated approach ensures students excel academically, socially, and emotionally while developing character, resilience, and a lifelong love of learning.",
     image: "/FORD-SCHOOL-LOGO.webp",
     clip: "polygon(60% 0%, 100% 30%, 80% 100%, 30% 90%, 0% 40%)",
-    bubbleColors: ["#FFD700", "#FF4500", "#00CED1"],
+    bubbleColors: ["#1c376e", "#E74C3C", "#6BE8EF"], // ark-deepblue, ark-red, ark-cyan
   },
 ];
 
-// Function to lighten hex color
 function lightenColor(hex: string, percent: number) {
   const num = parseInt(hex.replace("#", ""), 16);
   const r = Math.min(255, ((num >> 16) & 0xff) + 255 * (percent / 100));
@@ -67,7 +66,7 @@ export default function AboutSection({}: AboutSectionProps) {
   return (
     <motion.div
       key="about"
-      className="relative min-h-screen text-[var(--typo)] px-6 md:px-12 py-12 mt-15"
+      className="relative min-h-screen bg-white text-ark-navy px-6 md:px-12 py-12 mt-15"
       initial="hidden"
       animate="visible"
       exit={{ opacity: 0 }}
@@ -81,16 +80,14 @@ export default function AboutSection({}: AboutSectionProps) {
         transition={{ duration: 0.6 }}
         className="max-w-5xl mx-auto text-center mb-16"
       >
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 text-[var(--ford-primary)]">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 text-ark-deepblue">
           About Ford School
         </h1>
-        <p className="text-lg md:text-xl text-[var(--neutral-dark)] leading-relaxed">
+        <p className="text-lg md:text-xl text-ark-navy/80 leading-relaxed">
           Ford School Limited is dedicated to nurturing curiosity, creativity,
           and excellence in every student. With a comprehensive curriculum,
           nutritious meals, vibrant sports programs, immersive exposures, and a
-          nurturing environment, we prepare learners to thrive academically,
-          socially, and emotionally. Every corner of our school reflects
-          innovation, collaboration, and a commitment to lifelong learning.
+          nurturing environment...
         </p>
       </motion.section>
 
@@ -100,7 +97,7 @@ export default function AboutSection({}: AboutSectionProps) {
           const controls = useAnimation();
           const [ref, inView] = useInView({
             triggerOnce: true,
-            margin: "-100px",
+            rootMargin: "-100px",
           });
 
           if (inView) controls.start("visible");
@@ -115,18 +112,14 @@ export default function AboutSection({}: AboutSectionProps) {
               transition={{ duration: 0.8, delay: i * 0.15 }}
               className="flex flex-col md:flex-row items-start relative group"
             >
-              {/* Topic Image */}
+              {/* Image Container with Border Accent */}
               <motion.div
-                className="w-32 h-32 overflow-hidden shadow-lg flex-shrink-0 mb-4 md:mb-0 md:mr-6 relative z-10"
+                className="w-32 h-32 overflow-hidden shadow-xl shrink-0 mb-4 md:mb-0 md:mr-6 relative z-10 border-4 border-ark-lightblue"
                 style={{ clipPath: topic.clip }}
-                animate={{
-                  y: [0, -8, 0],
-                  rotate: [0, 2, -2, 0],
-                }}
+                animate={{ y: [0, -8, 0] }}
                 transition={{
                   duration: 6,
                   repeat: Infinity,
-                  repeatType: "loop",
                   ease: "easeInOut",
                 }}
               >
@@ -140,44 +133,38 @@ export default function AboutSection({}: AboutSectionProps) {
               </motion.div>
 
               <div className="flex-1 relative z-10">
-                {/* Title + Highlight Background */}
-                <div className="relative  flex items-center mb-2">
+                <div className="relative flex items-center mb-2">
                   <div
-                    className="absolute inset-0 rounded-2xl z-0"
-                    style={{
-                      backgroundColor: [
-                        lightenColor(topic.bubbleColors[0], 20),
-                      ],
-                    }}
+                    className="absolute inset-0 rounded-2xl z-0 opacity-20"
+                    style={{ backgroundColor: topic.bubbleColors[0] }}
                   />
-                  <h3 className="relative text-xl font-extrabold text-[var(--ford-primary)] px-4 py-2 z-10">
+                  <h3 className="relative text-xl font-extrabold text-ark-deepblue px-4 py-2 z-10">
                     {topic.title}
                   </h3>
                 </div>
 
-                {/* Description */}
-                <p className="text-[var(--ford-primary)] bg-[#8ea3c4]/20 font-bold rounded-b-4xl p-3.5 leading-relaxed">
+                {/* Description with Ark-Blue Tint Background */}
+                <p className="text-ark-navy bg-ark-lightblue/10 border-l-4 border-ark-cyan font-medium rounded-r-xl p-4 leading-relaxed shadow-sm">
                   {topic.description}
                 </p>
               </div>
 
-              {/* Optional Floating Bubbles */}
+              {/* Floating Bubbles using System Colors */}
               {topic.bubbleColors.map((color, idx) => (
                 <motion.div
                   key={idx}
-                  className="absolute rounded-full opacity-30 z-0"
+                  className="absolute rounded-full opacity-20 z-0"
                   style={{
-                    width: 24 + idx * 12,
-                    height: 24 + idx * 12,
+                    width: 20 + idx * 10,
+                    height: 20 + idx * 10,
                     backgroundColor: color,
-                    top: Math.random() * 80 - 20 + "%",
-                    left: Math.random() * 80 - 20 + "%",
+                    top: Math.random() * 60 + "%",
+                    left: Math.random() * 90 + "%",
                   }}
-                  animate={{ y: [0, -12, 0], x: [0, 8, -8, 0] }}
+                  animate={{ y: [0, -15, 0], x: [0, 10, -10, 0] }}
                   transition={{
-                    duration: 6 + idx,
+                    duration: 5 + idx,
                     repeat: Infinity,
-                    repeatType: "loop",
                     ease: "easeInOut",
                     delay: idx,
                   }}
