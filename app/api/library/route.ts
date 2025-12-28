@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { z } from "zod";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
+// IMPORT Prisma namespace for generated input types
+import { Prisma } from "@prisma/client";
 
 // -------------------- Schemas --------------------
 const bookSchema = z.object({
@@ -25,7 +27,9 @@ const QuerySchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!schoolAccount || !schoolAccount.schoolId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const { searchParams } = new URL(req.url);
     const query = QuerySchema.parse(Object.fromEntries(searchParams.entries()));
@@ -34,7 +38,8 @@ export async function GET(req: NextRequest) {
     const perPage = Math.max(Number(query.perPage ?? 10), 1);
     const skip = (page - 1) * perPage;
 
-    const where: Parameters<typeof prisma.book.findMany>[0]["where"] = {
+    // FIXED: Use Prisma.BookWhereInput to resolve the build-time property access error
+    const where: Prisma.BookWhereInput = {
       schoolId: schoolAccount.schoolId,
       ...(query.search ? { title: { contains: query.search, mode: "insensitive" } } : {}),
     };
@@ -52,8 +57,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: books, total, page, perPage });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.flatten().fieldErrors }, { status: 400 });
+    // FIXED: Use .issues for Zod compatibility in 2025 builds
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.issues }, { status: 400 });
+    }
 
     console.error("GET /api/library error:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
@@ -64,7 +71,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const schoolAccount = await SchoolAccount.init();
-    if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!schoolAccount || !schoolAccount.schoolId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await req.json();
     const data = bookSchema.parse(body);
@@ -80,32 +89,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: newBook }, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError)
-      return NextResponse.json({ error: err.flatten().fieldErrors }, { status: 400 });
+    // FIXED: Use .issues for Zod compatibility
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.issues }, { status: 400 });
+    }
 
     console.error("POST /api/library error:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
-
-/*
-Design reasoning:
-- SchoolAccount.init() argument-free ensures multi-tenant safety
-- GET supports pagination, search, and total count in a single $transaction
-- POST validates all fields and normalizes numeric input; sets available copies = totalCopies
-- Consistent error shapes: 401, 400, 500
-
-Structure:
-- GET → fetch books list
-- POST → create a new book
-
-Implementation guidance:
-- Frontend can query with ?page=&perPage=&search=
-- Always returns books with author and category populated
-- JSON shape: { data, total, page, perPage }
-
-Scalability insight:
-- Filters for category, author, or availability can be added easily
-- Multi-tenant safe; production-ready for school library management
-- Supports large datasets via pagination and $transaction
-*/
