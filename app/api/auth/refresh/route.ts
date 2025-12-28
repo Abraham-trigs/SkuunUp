@@ -22,11 +22,13 @@ export async function POST(_req: NextRequest) {
     }
 
     // Sign JWT using authoritative info
+    // FIXED: Cast to 'any' to bypass strict JwtPayload check in Next.js 15 builds.
+    // Default JwtPayload does not include 'schoolId', causing type errors during build.
     const newToken = signJwt({
       id: schoolAccount.info.id,
       role,
       schoolId: schoolAccount.school.id,
-    });
+    } as any);
 
     const res = NextResponse.json({ message: "Token refreshed" });
     res.cookies.set(COOKIE_NAME, newToken, COOKIE_OPTIONS);
@@ -47,6 +49,8 @@ Design reasoning:
 - Role is derived from staff position if applicable
 - JWT signed with authoritative id, role, and schoolId
 - Cookie set server-side to maintain secure session
+- Type casting 'as any' in 2025 builds allows multi-tenant claims (schoolId) 
+  to pass strict JWT payload validation.
 
 Structure:
 - POST() main handler
