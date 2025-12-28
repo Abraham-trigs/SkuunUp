@@ -1,25 +1,38 @@
 // app/api/library/borrowing/[id]/route.ts
-// Purpose: Update or delete a borrowing record and handle returned books safely
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { z } from "zod";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 
 // -------------------- Schemas --------------------
-const updateSchema = z.object({ returned: z.boolean().optional() });
+// We use a date or boolean-like input to trigger the return
+const updateSchema = z.object({ isReturning: z.boolean().optional() });
 
 // -------------------- Helpers --------------------
 async function assertBorrowingOwnership(borrowingId: string, schoolId: string) {
-  const borrowing = await prisma.borrowing.findUnique({ where: { id: borrowingId }, include: { book: true } });
+  // Scoped to school via the Student relation since Borrow lacks schoolId
+  const borrowing = await prisma.borrow.findUnique({ 
+    where: { id: borrowingId }, 
+    include: { 
+      book: true,
+      student: { select: { schoolId: true } } 
+    } 
+  });
+  
   if (!borrowing) throw new Error("Borrowing not found");
-  if (borrowing.schoolId !== schoolId) throw new Error("Forbidden");
+  // Multi-tenant check via student relation
+  if (borrowing.student.schoolId !== schoolId) throw new Error("Forbidden");
+  
   return borrowing;
 }
 
 // -------------------- PUT /:id --------------------
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params;
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -27,27 +40,34 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const data = updateSchema.parse(body);
 
     const updated = await prisma.$transaction(async (tx) => {
-      const borrowing = await assertBorrowingOwnership(params.id, schoolAccount.schoolId);
+      const borrowing = await assertBorrowingOwnership(id, schoolAccount.schoolId);
 
-      const updatedBorrowing = await tx.borrowing.update({
-        where: { id: params.id },
+      // Handle the return logic based on your schema's returnedAt field
+      const updatedBorrow = await tx.borrow.update({
+        where: { id },
         data: {
-          returned: data.returned ?? borrowing.returned,
-          returnedAt: data.returned ? new Date() : null,
+          returnedAt: data.isReturning ? new Date() : borrowing.returnedAt,
         },
-        include: { student: { include: { user: true } }, book: true, librarian: { include: { user: true } } },
+        include: { 
+          student: { include: { user: true } }, 
+          book: true 
+        },
       });
 
-      if (data.returned && !borrowing.returned) {
-        await tx.book.update({ where: { id: borrowing.bookId }, data: { quantity: borrowing.book.quantity + 1 } });
+      // Logic: If it wasn't returned before, but is being returned now, increment stock
+      if (data.isReturning && !borrowing.returnedAt) {
+        await tx.book.update({ 
+          where: { id: borrowing.bookId }, 
+          data: { quantity: borrowing.book.quantity + 1 } 
+        });
       }
 
-      return updatedBorrowing;
+      return updatedBorrow;
     });
 
     return NextResponse.json(updated, { status: 200 });
   } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.flatten().fieldErrors }, { status: 400 });
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 });
 
     const status = err.message === "Forbidden" ? 403 : err.message === "Borrowing not found" ? 404 : 500;
     return NextResponse.json({ error: err.message }, { status });
@@ -55,16 +75,27 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 // -------------------- DELETE /:id --------------------
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params;
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     await prisma.$transaction(async (tx) => {
-      const borrowing = await assertBorrowingOwnership(params.id, schoolAccount.schoolId);
+      const borrowing = await assertBorrowingOwnership(id, schoolAccount.schoolId);
 
-      await tx.borrowing.delete({ where: { id: params.id } });
-      await tx.book.update({ where: { id: borrowing.bookId }, data: { quantity: borrowing.book.quantity + 1 } });
+      await tx.borrow.delete({ where: { id } });
+      
+      // If book wasn't returned, we restore stock upon record deletion
+      if (!borrowing.returnedAt) {
+        await tx.book.update({ 
+          where: { id: borrowing.bookId }, 
+          data: { quantity: borrowing.book.quantity + 1 } 
+        });
+      }
     });
 
     return NextResponse.json({ success: true }, { status: 200 });
@@ -73,25 +104,3 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ error: err.message }, { status });
   }
 }
-
-/*
-Design reasoning:
-- All operations scoped to authenticated school
-- Book quantity updated atomically in transaction
-- PUT allows marking as returned safely
-
-Structure:
-- PUT → update borrowing (return book)
-- DELETE → remove borrowing and increment book quantity
-- Helper enforces ownership and reduces repeated checks
-
-Implementation guidance:
-- Use NextRequest and NextResponse consistently
-- Zod validation ensures safe input and field-level errors
-- Transactions prevent race conditions when returning books
-
-Scalability insight:
-- Can extend to multiple book copies or borrowing history
-- Ownership helper reusable across other library routes
-- Fully type-safe, multi-tenant, and production-ready
-*/
