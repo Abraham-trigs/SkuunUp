@@ -93,11 +93,16 @@ export async function POST(req: NextRequest) {
       data: {
         userId: parsed.userId,
         role: parsed.position,
-        department: parsed.department,
-        classId: parsed.classId,
+        // FIXED: Use the 'connect' pattern for nested relations
+        department: parsed.department ? {
+          connect: { id: parsed.department } 
+        } : undefined,
+        // Apply same pattern for class if it is also a relation
+        class: parsed.classId ? {
+          connect: { id: parsed.classId }
+        } : undefined,
         salary: parsed.salary,
         hireDate: parsed.hireDate ? new Date(parsed.hireDate) : undefined,
-        // FIXED: Removed schoolId from staff data as it resides in the User model
       },
       include: { user: true, class: true, department: true, subjects: true },
     });
@@ -105,7 +110,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(staff, { status: 201 });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      // FIXED: Switched from .errors to .issues for 2025 Zod compatibility
       return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
     }
 
