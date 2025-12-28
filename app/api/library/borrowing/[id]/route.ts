@@ -5,12 +5,10 @@ import { z } from "zod";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 
 // -------------------- Schemas --------------------
-// We use a date or boolean-like input to trigger the return
 const updateSchema = z.object({ isReturning: z.boolean().optional() });
 
 // -------------------- Helpers --------------------
 async function assertBorrowingOwnership(borrowingId: string, schoolId: string) {
-  // Scoped to school via the Student relation since Borrow lacks schoolId
   const borrowing = await prisma.borrow.findUnique({ 
     where: { id: borrowingId }, 
     include: { 
@@ -20,7 +18,6 @@ async function assertBorrowingOwnership(borrowingId: string, schoolId: string) {
   });
   
   if (!borrowing) throw new Error("Borrowing not found");
-  // Multi-tenant check via student relation
   if (borrowing.student.schoolId !== schoolId) throw new Error("Forbidden");
   
   return borrowing;
@@ -42,7 +39,6 @@ export async function PUT(
     const updated = await prisma.$transaction(async (tx) => {
       const borrowing = await assertBorrowingOwnership(id, schoolAccount.schoolId);
 
-      // Handle the return logic based on your schema's returnedAt field
       const updatedBorrow = await tx.borrow.update({
         where: { id },
         data: {
@@ -54,11 +50,14 @@ export async function PUT(
         },
       });
 
-      // Logic: If it wasn't returned before, but is being returned now, increment stock
+      // Logic: If it wasn't returned before, but is being returned now, increment available copies
       if (data.isReturning && !borrowing.returnedAt) {
         await tx.book.update({ 
           where: { id: borrowing.bookId }, 
-          data: { quantity: borrowing.book.quantity + 1 } 
+          data: { 
+            // FIXED: Using 'available' to match your Book model and 'increment' for type-safety
+            available: { increment: 1 } 
+          } 
         });
       }
 
@@ -89,11 +88,14 @@ export async function DELETE(
 
       await tx.borrow.delete({ where: { id } });
       
-      // If book wasn't returned, we restore stock upon record deletion
+      // If book wasn't returned yet, restore 'available' count upon record deletion
       if (!borrowing.returnedAt) {
         await tx.book.update({ 
           where: { id: borrowing.bookId }, 
-          data: { quantity: borrowing.book.quantity + 1 } 
+          data: { 
+            // FIXED: Using 'available' and atomic 'increment'
+            available: { increment: 1 } 
+          } 
         });
       }
     });
