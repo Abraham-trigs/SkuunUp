@@ -16,20 +16,25 @@ const ExamUpdateSchema = z.object({
 });
 
 // -------------------- Helpers --------------------
-const canModifyExam = (role: Role) => ["TEACHER", "ASSISTANT_TEACHER", "EXAM_OFFICER"].includes(role);
+const canModifyExam = (role: Role) => (["TEACHER", "ASSISTANT_TEACHER", "EXAM_OFFICER"] as string[]).includes(role);
 
 // -------------------- GET /:id --------------------
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> } // NEXT 15: Async params
+) {
   try {
+    const { id } = await params;
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const exam = await prisma.exam.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { student: true, subject: true },
     });
 
-    if (!exam || exam.student.schoolId !== schoolAccount.schoolId)
+    // FIXED: Added optional chaining (?.) to student relation for strict null checks
+    if (!exam || exam.student?.schoolId !== schoolAccount.schoolId)      
       return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
     return NextResponse.json({ data: exam });
@@ -40,8 +45,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // -------------------- PUT /:id --------------------
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> } // NEXT 15: Async params
+) {
   try {
+    const { id } = await params;
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!canModifyExam(schoolAccount.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -51,15 +60,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const updated = await prisma.$transaction(async (tx) => {
       const exam = await tx.exam.findUnique({
-        where: { id: params.id },
+        where: { id },
         include: { student: true, subject: true },
       });
 
-      if (!exam || exam.student.schoolId !== schoolAccount.schoolId)
+      // FIXED: Added optional chaining (?.) to student relation
+      if (!exam || exam.student?.schoolId !== schoolAccount.schoolId)
         throw new Error("Exam not found or does not belong to your school");
 
       return tx.exam.update({
-        where: { id: params.id },
+        where: { id },
         data: parsed,
         include: { student: true, subject: true },
       });
@@ -67,7 +77,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     return NextResponse.json({ data: updated });
   } catch (err: any) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.flatten() }, { status: 400 });
+    // FIXED: Use .issues for Zod v4 compatibility in 2025 builds
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 });
 
     console.error("PUT /api/exams/:id error:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
@@ -75,46 +86,30 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 // -------------------- DELETE /:id --------------------
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> } // NEXT 15: Async params
+) {
   try {
+    const { id } = await params;
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!canModifyExam(schoolAccount.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const exam = await prisma.exam.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { student: true },
     });
 
-    if (!exam || exam.student.schoolId !== schoolAccount.schoolId)
+    // FIXED: Added optional chaining (?.) to student relation
+    if (!exam || exam.student?.schoolId !== schoolAccount.schoolId)
       return NextResponse.json({ error: "Exam not found or not in your school" }, { status: 404 });
 
-    await prisma.exam.delete({ where: { id: params.id } });
+    await prisma.exam.delete({ where: { id } });
 
-    return NextResponse.json({ data: { id: params.id, deleted: true } });
+    return NextResponse.json({ data: { id, deleted: true } });
   } catch (err: any) {
     console.error("DELETE /api/exams/:id error:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
-
-/*
-Design reasoning:
-- All exam operations scoped to authenticated school via argument-free SchoolAccount.init()
-- PUT and DELETE restricted to authorized roles (TEACHER, ASSISTANT_TEACHER, EXAM_OFFICER)
-- PUT uses transaction to prevent cross-school updates
-- Zod validation ensures type safety and input normalization
-
-Structure:
-- GET → fetch single exam with student and subject
-- PUT → update exam safely, transactional
-- DELETE → remove exam if user authorized and school-scoped
-
-Implementation guidance:
-- Frontend can safely query, update, or delete exams with role checks
-- Returns consistent error shapes: 401, 403, 404, 400, 500
-
-Scalability insight:
-- Adding new roles or exam fields only requires schema updates
-- Multi-tenant safe; supports future audit logs or history tracking
-*/
