@@ -101,6 +101,7 @@ export async function POST(
           },
           create: { 
             studentId: r.studentId, 
+            classId: classId, // FIXED: Added required classId to create block
             date: new Date(date.toDateString()), 
             status: r.status, 
             timeIn: r.timeIn ? new Date(r.timeIn) : null, 
