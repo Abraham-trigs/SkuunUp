@@ -1,44 +1,57 @@
+// app/api/subjects/route.ts
+// Purpose: List and create subjects scoped to the authenticated school
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
 
-// ------------------------- Schema -------------------------
-const subjectSchema = z.object({
-  name: z.string().min(1, "Name is required").trim(),
-  code: z.string().min(1, "Code is required").trim(),
-  description: z.string().optional().nullable(),
+// ------------------------- Schemas -------------------------
+const subjectCreateSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  code: z.string().min(1, "Code is required").toUpperCase(),
+  description: z.string().optional(),
 });
 
-const normalizeInput = (input: any) => ({
-  name: input.name?.trim(),
-  code: input.code?.trim().toUpperCase(),
-  description: input.description?.trim() || null,
+const querySchema = z.object({
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  search: z.string().optional(),
 });
 
-// ------------------------- GET Subjects -------------------------
+// ------------------------- GET: List Subjects -------------------------
 export async function GET(req: NextRequest) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
-    const page = Number(searchParams.get("page") || 1);
-    const limit = Number(searchParams.get("limit") || 10);
-    const search = searchParams.get("search")?.trim() || "";
+    const query = querySchema.parse(Object.fromEntries(searchParams.entries()));
 
-    const where: any = { schoolId: schoolAccount.schoolId };
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { code: { contains: search, mode: "insensitive" } },
-      ];
-    }
+    const page = Number(query.page || 1);
+    const limit = Number(query.limit || 10);
+    const search = query.search?.trim();
 
-    const [data, total] = await prisma.$transaction([
+    // FIXED: Filter schoolId via the createdBy (User) relation path
+    const where: any = {
+      createdBy: { schoolId: schoolAccount.schoolId },
+      ...(search ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { code: { contains: search, mode: "insensitive" } },
+        ],
+      } : {}),
+    };
+
+    const [subjects, total] = await prisma.$transaction([
       prisma.subject.findMany({
         where,
-        include: { createdBy: { select: { id: true, name: true, role: true } } },
+        // FIXED: Use surname and firstName to match the User model schema
+        include: { 
+          createdBy: { 
+            select: { id: true, surname: true, firstName: true, role: true } 
+          } 
+        },
         orderBy: { name: "asc" },
         skip: (page - 1) * limit,
         take: limit,
@@ -46,42 +59,53 @@ export async function GET(req: NextRequest) {
       prisma.subject.count({ where }),
     ]);
 
-    return NextResponse.json({ data, meta: { total, page, limit } });
+    return NextResponse.json({ subjects, total, page, limit });
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Failed to fetch subjects" }, { status: 500 });
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 });
+    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
 }
 
-// ------------------------- POST Subject -------------------------
+// ------------------------- POST: Create Subject -------------------------
 export async function POST(req: NextRequest) {
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const json = await req.json();
-    const parsed = subjectSchema.safeParse(normalizeInput(json));
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
-    }
+    const body = await req.json();
+    const data = subjectCreateSchema.parse(body);
 
-    const exists = await prisma.subject.findFirst({
-      where: { code: parsed.data.code, schoolId: schoolAccount.schoolId },
+    // Check for duplicate code within the same school
+    const existing = await prisma.subject.findFirst({
+      where: { 
+        code: data.code, 
+        createdBy: { schoolId: schoolAccount.schoolId } 
+      },
     });
-    if (exists) return NextResponse.json({ error: "Subject code already exists" }, { status: 409 });
+
+    if (existing) return NextResponse.json({ error: "Subject code already exists" }, { status: 409 });
 
     const subject = await prisma.subject.create({
       data: {
-        ...parsed.data,
-        schoolId: schoolAccount.schoolId,
+        name: data.name,
+        code: data.code,
+        description: data.description,
         createdById: schoolAccount.info.id,
       },
-      include: { createdBy: { select: { id: true, name: true, role: true } } },
+      // FIXED: Consistently use surname/firstName for User selection
+      include: { 
+        createdBy: { 
+          select: { id: true, surname: true, firstName: true, role: true } 
+        } 
+      },
     });
 
     return NextResponse.json(subject, { status: 201 });
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Failed to create subject" }, { status: 500 });
+    if (err instanceof z.ZodError) {
+      // FIXED: Standardized Zod error handling for 2025 Next.js build
+      return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
+    }
+    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
   }
 }
