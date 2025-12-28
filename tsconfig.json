@@ -20,9 +20,8 @@
     "allowImportingTsExtensions": true,
     "baseUrl": "./",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@prisma-client": ["./generated/prisma"] 
     },
     "incremental": true,
     "jsx": "preserve",
@@ -39,7 +38,8 @@
     "lib/**/*.ts",
     "next-env.d.ts",
     "prisma/**/*.ts",
-    "build/types/**/*.ts"
+    "build/types/**/*.ts",
+    "generated/prisma/index.d.ts" 
   ],
   "exclude": [
     "node_modules",
