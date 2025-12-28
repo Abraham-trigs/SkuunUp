@@ -23,11 +23,15 @@ export async function GET(
   const schoolAccount = await SchoolAccount.init();
   if (!schoolAccount) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  // Only fetch staff in the same school
+  // FIXED: Filter through the 'user' relation to access 'schoolId'
   const records = await prisma.staffAttendance.findMany({
     where: {
       staffId: params.id,
-      staff: { schoolId: schoolAccount.schoolId },
+      staff: {
+        user: {
+          schoolId: schoolAccount.schoolId,
+        },
+      },
     },
     orderBy: { date: "desc" },
   });
@@ -46,7 +50,7 @@ export async function POST(
   if (!schoolAccount) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
   // Role-based access: Only Admin, Principal, or HR can create attendance
-  if (![Role.ADMIN, Role.PRINCIPAL, Role.HR].includes(schoolAccount.role))
+  if (!schoolAccount.hasRole([Role.ADMIN, Role.PRINCIPAL, Role.HR]))
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
@@ -67,7 +71,8 @@ export async function POST(
     return NextResponse.json(attendance, { status: 201 });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors }, { status: 400 });
+      // FIXED: Use .issues for 2025 Zod compatibility
+      return NextResponse.json({ error: err.issues }, { status: 400 });
     }
     return NextResponse.json({ message: err.message || "Failed to create attendance" }, { status: 500 });
   }
