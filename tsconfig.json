@@ -18,10 +18,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "allowImportingTsExtensions": true,
-    "baseUrl": "./",
+   "baseUrl": ".", 
     "paths": {
       "@/*": ["./*"],
-      "@prisma-client": ["./generated/prisma"] 
+      "@prisma-client": ["./generated/prisma"]
     },
     "incremental": true,
     "jsx": "preserve",

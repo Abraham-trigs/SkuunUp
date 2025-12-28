@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion"; // Added Variants import
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface GalleryGridProps {
@@ -37,7 +37,8 @@ export default function GalleryGrid({ imageFiles }: GalleryGridProps) {
   // Random rotation helper
   const randomRotation = () => Math.floor(Math.random() * 30) - 15;
 
-  const containerVariants = {
+  // Explicitly typed as Variants to fix the build error
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -45,7 +46,8 @@ export default function GalleryGrid({ imageFiles }: GalleryGridProps) {
     },
   };
 
-  const cardVariants = {
+  // Explicitly typed as Variants to fix the build error
+  const cardVariants: Variants = {
     hidden: { opacity: 0, scale: 0.7, rotateY: randomRotation(), y: 40 },
     visible: {
       opacity: 1,
