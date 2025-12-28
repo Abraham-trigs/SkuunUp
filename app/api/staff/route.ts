@@ -92,12 +92,11 @@ export async function POST(req: NextRequest) {
     const staff = await prisma.staff.create({
       data: {
         userId: parsed.userId,
-        role: parsed.position,
-        // FIXED: Use the 'connect' pattern for nested relations
+        // FIXED: Change 'role' to 'position' to match the Staff model
+        position: parsed.position, 
         department: parsed.department ? {
           connect: { id: parsed.department } 
         } : undefined,
-        // Apply same pattern for class if it is also a relation
         class: parsed.classId ? {
           connect: { id: parsed.classId }
         } : undefined,
@@ -112,7 +111,6 @@ export async function POST(req: NextRequest) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
     }
-
     console.error("POST /staff error:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
