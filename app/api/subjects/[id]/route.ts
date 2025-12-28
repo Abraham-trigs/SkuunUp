@@ -1,3 +1,4 @@
+// app/api/subjects/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
@@ -16,7 +17,7 @@ const normalizeInput = (input: any) => ({
   description: input.description?.trim() || null,
 });
 
-const jsonError = (payload: { error: string | Record<string, string[]> }, status = 400) =>
+const jsonError = (payload: { error: any }, status = 400) =>
   NextResponse.json(payload, { status });
 
 // ------------------------- GET /[id] -------------------------
@@ -29,8 +30,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (!subjectId) return jsonError({ error: "Missing subject id" }, 400);
 
     const subject = await prisma.subject.findFirst({
-      where: { id: subjectId, schoolId: schoolAccount.schoolId },
-      include: { createdBy: { select: { id: true, name: true, role: true } } },
+      where: { 
+        id: subjectId, 
+        // FIXED: schoolId is on User (createdBy), not directly on Subject
+        createdBy: { schoolId: schoolAccount.schoolId } 
+      },
+      // FIXED: select surname/firstName to match User model
+      include: { createdBy: { select: { id: true, surname: true, firstName: true, role: true } } },
     });
 
     if (!subject) return jsonError({ error: "Subject not found" }, 404);
@@ -48,22 +54,29 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!schoolAccount) return jsonError({ error: "Unauthorized" }, 401);
 
     const subjectId = params.id;
-    if (!subjectId) return jsonError({ error: "Missing subject id" }, 400);
-
     const raw = await req.json();
     const normalized = normalizeInput(raw);
+    
+    // FIXED: Standardize Zod error response using .issues
     const parsed = subjectSchema.safeParse(normalized);
-    if (!parsed.success) return jsonError({ error: parsed.error.flatten().fieldErrors }, 400);
+    if (!parsed.success) return jsonError({ error: parsed.error.issues }, 400);
 
     const payload = parsed.data;
 
     const [existingSubject, duplicateCode] = await prisma.$transaction([
       prisma.subject.findFirst({
-        where: { id: subjectId, schoolId: schoolAccount.schoolId },
+        where: { 
+          id: subjectId, 
+          createdBy: { schoolId: schoolAccount.schoolId } 
+        },
         select: { id: true },
       }),
       prisma.subject.findFirst({
-        where: { code: payload.code, schoolId: schoolAccount.schoolId, NOT: { id: subjectId } },
+        where: { 
+          code: payload.code, 
+          createdBy: { schoolId: schoolAccount.schoolId }, 
+          NOT: { id: subjectId } 
+        },
         select: { id: true },
       }),
     ]);
@@ -74,7 +87,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const updated = await prisma.subject.update({
       where: { id: subjectId },
       data: payload,
-      include: { createdBy: { select: { id: true, name: true, role: true } } },
+      include: { createdBy: { select: { id: true, surname: true, firstName: true, role: true } } },
     });
 
     return NextResponse.json(updated);
@@ -91,10 +104,12 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (!schoolAccount) return jsonError({ error: "Unauthorized" }, 401);
 
     const subjectId = params.id;
-    if (!subjectId) return jsonError({ error: "Missing subject id" }, 400);
 
     const subject = await prisma.subject.findFirst({
-      where: { id: subjectId, schoolId: schoolAccount.schoolId },
+      where: { 
+        id: subjectId, 
+        createdBy: { schoolId: schoolAccount.schoolId } 
+      },
       select: { id: true },
     });
     if (!subject) return jsonError({ error: "Subject not found" }, 404);
