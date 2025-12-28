@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
-import { Role } from "@prisma/client";
+import { Role } from "@/generated/prisma"; 
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
 

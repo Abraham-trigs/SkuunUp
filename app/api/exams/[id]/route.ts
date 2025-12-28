@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { z } from "zod";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
-import { Role } from "@prisma/client";
+import { Role } from "@/generated/prisma"; 
 
 // -------------------- Schemas --------------------
 const ExamUpdateSchema = z.object({

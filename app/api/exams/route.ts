@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db.ts";
 import { z } from "zod";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 // IMPORT Prisma namespace for stable type access
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma"; 
 
 // -------------------- Schemas --------------------
 const ExamCreateSchema = z.object({

@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { SchoolAccount } from "@/lib/schoolAccount";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma"; 
 
 // -------------------- Schemas --------------------
 const querySchema = z.object({

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
 // FIXED: Import the authoritative Role enum from Prisma
-import { Role } from "@prisma/client";
+import { Role } from "@/generated/prisma"; 
 
 // -------------------- Zod schema for PUT --------------------
 const userUpdateSchema = z.object({

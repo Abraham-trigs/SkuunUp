@@ -4,8 +4,7 @@ import { prisma } from "@/lib/db";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { Role } from "@prisma/client"; // Fixes the Type 'string' assignment error
-
+import { Role } from "@/generated/prisma"; 
 // ------------------- Zod schemas -------------------
 const userQuerySchema = z.object({
   search: z.string().optional(),

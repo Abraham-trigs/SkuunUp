@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { Role } from "@/generated/prisma"; 
+
 
 const attendanceSchema = z.object({
   date: z.string().optional(),

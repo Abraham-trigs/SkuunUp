@@ -7,8 +7,7 @@ import React, { useEffect, useState } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import { useClassesStore } from "@/app/store/useClassesStore.ts";
 import LabeledInput from "./LabeledInput.tsx";
-import { Class } from "@prisma/client";
-
+import { Class } from "@/generated/prisma";
 // Extend Class type to include grades
 interface ClassWithGrades extends Class {
   grades: { id: string; name: string; capacity: number; enrolled: number }[];
