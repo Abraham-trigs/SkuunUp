@@ -51,42 +51,50 @@ export const useExamStore = create<ExamState>((set, get) => {
     setPage: (page: number) => set({ page }),
     setSearch: (search: string) => set({ search }),
 
-    fetchExams: ({ search, page, perPage, studentId } = {}) => {
-      const currentSearch = search !== undefined ? search : get().search;
-      const currentPage = page !== undefined ? page : get().page;
-      const currentPerPage = perPage !== undefined ? perPage : get().perPage;
+   fetchExams: ({ search, page, perPage, studentId } = {}) => {
+      const currentSearch = search ?? get().search;
+      const currentPage = page ?? get().page;
+      const currentPerPage = perPage ?? get().perPage;
 
       debounce(async () => {
-        set({ loading: true, error: null });
-        try {
-          const params = new URLSearchParams();
-          if (currentSearch) params.append("search", currentSearch);
-          params.append("page", String(currentPage));
-          params.append("perPage", String(currentPerPage));
-          if (studentId) params.append("studentId", studentId);
+      set({ loading: true, error: null });
+      try {
+        const params = new URLSearchParams();
+        if (currentSearch) params.append("search", currentSearch);
+        params.append("page", String(currentPage));
+        params.append("perPage", String(currentPerPage));
+        if (studentId) params.append("studentId", studentId);
 
-          const res = await fetch(`/api/exams?${params.toString()}`);
-          const json = await res.json();
+        const res = await fetch(`/api/exams?${params.toString()}`);
+        const json = await res.json();
 
-          if (res.ok) {
-            const totalPages = Math.ceil(json.total / currentPerPage);
-            set({
-              exams: json.exams,
-              total: json.total,
-              page: currentPage,
-              perPage: currentPerPage,
-              totalPages,
-            });
-          } else {
-            set({ error: json.error || "Failed to fetch exams" });
-          }
-        } catch (err: any) {
-          set({ error: err.message });
-        } finally {
-          set({ loading: false });
+        if (res.ok) {
+          const totalPages = Math.ceil(json.total / currentPerPage);
+
+          // Map each exam to ensure subjectName exists
+          const examsWithSubjectName: RichExam[] = json.exams.map((exam: any) => ({
+            ...exam,
+            subjectName: exam.subjectName || exam.subject, // fallback only at fetch
+          }));
+
+          set({
+            exams: examsWithSubjectName,
+            total: json.total,
+            page: currentPage,
+            perPage: currentPerPage,
+            totalPages,
+          });
+        } else {
+          set({ error: json.error || "Failed to fetch exams" });
         }
+      } catch (err: any) {
+        set({ error: err.message });
+      } finally {
+        set({ loading: false });
+      }
       }, 300);
     },
+
 
     createExam: async (data) => {
       try {

@@ -7,6 +7,7 @@ interface PaginationProps {
   totalPages: number;
   onPrev: () => void;
   onNext: () => void;
+  className?: string; // optional styling override
 }
 
 export const Pagination: React.FC<PaginationProps> = ({
@@ -14,9 +15,12 @@ export const Pagination: React.FC<PaginationProps> = ({
   totalPages,
   onPrev,
   onNext,
+  className,
 }) => {
   return (
-    <div className="flex items-center justify-between px-2">
+    <div
+      className={`flex items-center justify-between px-2 ${className || ""}`}
+    >
       <p className="text-xs font-medium opacity-50 text-[#BFCDEF]">
         Page {page} of {totalPages}
       </p>
