@@ -256,33 +256,38 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     }
   },
 
-  loadStudentData: (admission) => {
-    if (!admission) return;
+ loadStudentData: (admission) => {
+  if (!admission) return;
 
-    const classesStore = useClassesStore.getState();
-    let className: string | undefined;
-    let gradeName: string | undefined;
+  const classesStore = useClassesStore.getState();
+  let className: string | undefined;
+  let gradeName: string | undefined;
 
-    if (admission.classId) {
-      const selectedClass = classesStore.classes.find((c) => c.id === admission.classId);
-      className = selectedClass?.name;
+  if (admission.classId) {
+    const selectedClass = classesStore.classes.find((c) => c.id === admission.classId);
+    className = selectedClass?.name;
 
-      const gradeList = selectedClass?.grades || [];
-      if (admission.gradeId) {
-        const selectedGrade = gradeList.find((g) => g.id === admission.gradeId);
-        gradeName = selectedGrade?.name;
-      } else {
-const firstAvailableGrade = gradeList.find(
-  (g) => (g.Application?.length ?? 0) < (g.capacity ?? 0)
-);
-gradeName = firstAvailableGrade?.name;      }
+    const gradeList: GradeOption[] = (selectedClass?.grades || []).map((g) => ({
+      id: g.id,
+      name: g.name,
+      capacity: g.capacity ?? 0,
+      enrolled: g.Application?.length ?? 0,
+    }));
+
+    if (admission.gradeId) {
+      const selectedGrade = gradeList.find((g) => g.id === admission.gradeId);
+      gradeName = selectedGrade?.name;
+    } else {
+      const firstAvailableGrade = gradeList.find((g) => g.enrolled < g.capacity);
+      gradeName = firstAvailableGrade?.name;
     }
+  }
 
-    set({
-      formData: { ...admission, className, gradeName, progress: calculateProgress(admission) },
-      userCreated: true,
-    });
-  },
+  set({
+    formData: { ...admission, className, gradeName, progress: calculateProgress(admission) },
+    userCreated: true,
+  });
+},
 
   addFamilyMember: (member) => {
     get().optimisticUpdate(
@@ -316,13 +321,20 @@ gradeName = firstAvailableGrade?.name;      }
     );
   },
 
-setClass: (classId: string, grades?: GradeWithApplications[]) => {
+  setClass: (classId: string, grades?: GradeWithApplications[]) => {
     const classesStore = useClassesStore.getState();
     const selectedClass = classesStore.classes.find((c) => c.id === classId);
 
     if (!selectedClass) {
       set((state) => ({
-        formData: { ...state.formData, classId: "", className: "", gradeId: "", gradeName: "", progress: calculateProgress({ ...state.formData }) },
+        formData: {
+          ...state.formData,
+          classId: "",
+          className: "",
+          gradeId: "",
+          gradeName: "",
+          progress: calculateProgress({ ...state.formData }),
+        },
         gradesForSelectedClass: [],
       }));
       return;
@@ -345,28 +357,35 @@ setClass: (classId: string, grades?: GradeWithApplications[]) => {
         className: selectedClass.name,
         gradeId: grade?.id || "",
         gradeName: grade?.name || "",
-        progress: calculateProgress({ ...state.formData, classId, className: selectedClass.name, gradeId: grade?.id || "", gradeName: grade?.name || "" }),
+        progress: calculateProgress({
+          ...state.formData,
+          classId,
+          className: selectedClass.name,
+          gradeId: grade?.id || "",
+          gradeName: grade?.name || "",
+        }),
       },
       gradesForSelectedClass: mappedGrades,
     }));
   },
 
-  selectGrade: (gradeId, grades) => {
-    const gradeList: GradeOption[] = grades || get().gradesForSelectedClass;
-    if (!gradeList || gradeList.length === 0) return;
+selectGrade: (gradeId, grades) => {
+  const gradeList: GradeOption[] = grades || get().gradesForSelectedClass;
+  if (!gradeList || gradeList.length === 0) return;
 
-    const grade = gradeId
-      ? gradeList.find((g) => g.id === gradeId)
-      : gradeList.find((g) => g.enrolled < g.capacity);
-    if (!grade) return;
+  const grade = gradeId
+    ? gradeList.find((g) => g.id === gradeId)
+    : gradeList.find((g) => g.enrolled < g.capacity);
 
-    set((state) => ({
-      formData: {
-        ...state.formData,
-        gradeId: grade.id,
-        gradeName: grade.name,
-        progress: calculateProgress({ ...state.formData, gradeId: grade.id, gradeName: grade.name }),
-      },
-    }));
-  },
+  if (!grade) return;
+
+  set((state) => ({
+    formData: {
+      ...state.formData,
+      gradeId: grade.id,
+      gradeName: grade.name,
+      progress: calculateProgress({ ...state.formData, gradeId: grade.id, gradeName: grade.name }),
+    },
+  }));
+},
 }));
