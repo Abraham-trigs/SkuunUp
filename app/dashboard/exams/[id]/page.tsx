@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Search, Calendar } from "lucide-react";
 import ExamsFormModal from "../components/ExamsFormModal.tsx";
 import ConfirmDeleteExamModal from "../components/ConfirmDeleteExamModal.tsx";
-import { useExamStore } from "@/app/store/examsStore.ts";
+import { useExamStore, RichExam } from "@/app/store/examsStore.ts";
 
 export default function StudentExamsPage() {
   const { id: studentId } = useParams();
 
-  // FIX: Destructure 'perPage' instead of 'limit' to match your store
   const {
     exams,
     total,
@@ -20,13 +19,13 @@ export default function StudentExamsPage() {
     perPage,
     search,
     fetchExams,
-
     setPage,
     setSearch,
     deleteExam,
   } = useExamStore();
 
-  const [selectedExam, setSelectedExam] = useState<any>(null);
+  // Use the RichExam type for the selected exam state
+  const [selectedExam, setSelectedExam] = useState<RichExam | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
@@ -47,55 +46,83 @@ export default function StudentExamsPage() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <header className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Student Exams</h1>
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Student Exams</h1>
+          <p className="text-sm text-gray-500">
+            View and manage examination records
+          </p>
+        </div>
         <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          onClick={() => {
+            setSelectedExam(null);
+            setIsModalOpen(true);
+          }}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
         >
-          <Plus size={16} /> Add Exam
+          <Plus size={18} /> Add Exam Record
         </button>
       </header>
 
-      <div className="flex justify-end mb-4">
+      {/* Filter Bar */}
+      <div className="relative">
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          size={18}
+        />
         <input
           type="text"
-          placeholder="Search exams..."
-          className="border p-2 rounded w-full md:w-1/2"
+          placeholder="Search by subject name..."
+          className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-full md:w-96 text-black focus:ring-2 focus:ring-blue-500 outline-none transition-all"
           value={search || ""}
           onChange={(e) => handleSearchChange(e.target.value)}
         />
       </div>
 
+      {/* Data Section */}
       {loading ? (
-        <div className="flex justify-center mt-10">
-          <Loader2 className="animate-spin w-10 h-10 text-gray-400" />
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="animate-spin w-12 h-12 text-blue-600 mb-2" />
+          <p className="text-gray-500 animate-pulse">Loading records...</p>
         </div>
       ) : error ? (
-        <p className="text-red-500">{error}</p>
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
       ) : exams.length === 0 ? (
-        <p className="text-gray-500 italic">
-          No exams recorded for this student
-        </p>
+        <div className="text-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+          <p className="text-gray-500">No exams recorded for this student</p>
+        </div>
       ) : (
-        <ul className="space-y-3">
+        <div className="grid gap-4">
           {exams.map((exam) => (
-            <li
+            <div
               key={exam.id}
-              className="bg-white p-4 shadow rounded flex justify-between items-center text-black"
+              className="bg-white p-5 border border-gray-200 shadow-sm rounded-xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-blue-300 transition-colors"
             >
-              <div>
-                <span className="font-medium">{exam.subject}</span>:{" "}
-                {exam.score}/{exam.maxScore}
+              <div className="space-y-1">
+                {/* FIX: Use subjectName to match updated RichExam type */}
+                <h3 className="font-bold text-lg text-gray-900">
+                  {exam.subjectName || "Unknown Subject"}
+                </h3>
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <span className="flex items-center gap-1">
+                    <Calendar size={14} />
+                    {new Date(exam.date).toLocaleDateString()}
+                  </span>
+                  <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                    Score: {exam.score} / {exam.maxScore}
+                  </span>
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 sm:self-center">
                 <button
                   onClick={() => {
                     setSelectedExam(exam);
                     setIsModalOpen(true);
                   }}
-                  className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm"
+                  className="flex-1 sm:flex-none px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors text-sm font-medium"
                 >
                   Edit
                 </button>
@@ -104,46 +131,71 @@ export default function StudentExamsPage() {
                     setSelectedExam(exam);
                     setIsDeleteOpen(true);
                   }}
-                  className="px-2 py-1 bg-red-100 text-red-800 rounded text-sm"
+                  className="flex-1 sm:flex-none px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-100 transition-colors text-sm font-medium"
                 >
                   Delete
                 </button>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
-      )}
-
-      {/* Pagination Fix: use perPage */}
-      {exams.length > 0 && (
-        <div className="flex justify-between mt-4 items-center text-sm">
-          <button
-            disabled={page <= 1}
-            onClick={() => {
-              if (setPage) setPage(page - 1);
-              fetchExams({ studentId: studentId as string, page: page - 1 });
-            }}
-            className="px-3 py-1 border rounded disabled:opacity-50"
-          >
-            Prev
-          </button>
-          <span>
-            Page {page} / {Math.ceil(total / perPage)}
-          </span>
-          <button
-            disabled={page * perPage >= total}
-            onClick={() => {
-              if (setPage) setPage(page + 1);
-              fetchExams({ studentId: studentId as string, page: page + 1 });
-            }}
-            className="px-3 py-1 border rounded disabled:opacity-50"
-          >
-            Next
-          </button>
         </div>
       )}
 
-      {/* Modals remain the same */}
+      {/* Pagination Footer */}
+      {exams.length > 0 && (
+        <footer className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-100 text-sm">
+          <p className="text-gray-500">
+            Showing page{" "}
+            <span className="font-semibold text-gray-900">{page}</span> of{" "}
+            <span className="font-semibold text-gray-900">
+              {Math.ceil(total / perPage)}
+            </span>
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => {
+                if (setPage) setPage(page - 1);
+                fetchExams({ studentId: studentId as string, page: page - 1 });
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all font-medium text-gray-700"
+            >
+              Previous
+            </button>
+            <button
+              disabled={page * perPage >= total}
+              onClick={() => {
+                if (setPage) setPage(page + 1);
+                fetchExams({ studentId: studentId as string, page: page + 1 });
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all font-medium text-gray-700"
+            >
+              Next
+            </button>
+          </div>
+        </footer>
+      )}
+
+      {/* Modals */}
+      {isModalOpen && (
+        <ExamsFormModal
+          exam={selectedExam}
+          studentId={studentId as string}
+          onClose={() => {
+            setSelectedExam(null);
+            setIsModalOpen(false);
+            fetchExams({ studentId: studentId as string, page });
+          }}
+        />
+      )}
+
+      {isDeleteOpen && selectedExam && (
+        <ConfirmDeleteExamModal
+          exam={selectedExam}
+          onClose={() => setIsDeleteOpen(false)}
+          onConfirm={() => handleDelete(selectedExam.id)}
+        />
+      )}
     </div>
   );
 }
