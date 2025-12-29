@@ -1,140 +1,169 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Dialog } from "@headlessui/react";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { useExamStore, RichExam } from "@/app/store/examsStore.ts";
 
 interface ExamsFormModalProps {
-  isOpen?: boolean;
   exam?: RichExam | null;
   studentId: string;
   onClose: () => void;
 }
 
 export default function ExamsFormModal({
-  isOpen = true,
   exam,
   studentId,
   onClose,
 }: ExamsFormModalProps) {
-  const [subject, setSubject] = useState("");
-  const [score, setScore] = useState<number | "">("");
-  const [maxScore, setMaxScore] = useState<number | "">("");
-
   const { createExam, updateExam } = useExamStore();
+  const [loading, setLoading] = useState(false);
 
-  // Load exam data safely
+  // Initialize with correct types
+  const [formData, setFormData] = useState({
+    subjectName: "",
+    score: 0,
+    maxScore: 100,
+    date: new Date().toISOString().split("T")[0], // Ensure string, not array
+  });
+
   useEffect(() => {
     if (exam) {
-      setSubject(exam.subject ?? "");
-      setScore(exam.score ?? "");
-      setMaxScore(exam.maxScore ?? "");
-    } else {
-      setSubject("");
-      setScore("");
-      setMaxScore("");
+      setFormData({
+        subjectName: exam.subjectName || "",
+        score: Number(exam.score) || 0,
+        maxScore: Number(exam.maxScore) || 100,
+        // Ensure we take index [0] to get YYYY-MM-DD string
+        date: exam.date
+          ? new Date(exam.date).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+      });
     }
   }, [exam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
-    if (!studentId) {
-      console.error("Student ID is required");
-      return;
-    }
-
-    const data = {
-      subject: subject.trim(),
-      score: typeof score === "number" ? score : 0,
-      maxScore: typeof maxScore === "number" ? maxScore : 0,
-      studentId,
+    // Construct payload explicitly to satisfy Partial<RichExam>
+    const payload: Partial<RichExam> = {
+      subjectName: formData.subjectName,
+      score: formData.score,
+      maxScore: formData.maxScore,
+      date: new Date(formData.date), // Convert string back to Date for Prisma compatibility
+      studentId: studentId,
     };
 
     try {
       if (exam?.id) {
-        await updateExam(exam.id, data);
+        await updateExam(exam.id, payload);
       } else {
-        await createExam(data);
+        await createExam(payload);
       }
       onClose();
-    } catch (err: any) {
-      console.error("Failed to save exam:", err.message ?? err);
+    } catch (err) {
+      console.error("Save error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Dialog
-      open={isOpen}
-      onClose={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-    >
-      <Dialog.Panel className="bg-white rounded-lg p-6 w-full max-w-md">
-        <div className="flex justify-between items-center mb-4">
-          <Dialog.Title className="text-lg font-medium">
-            {exam ? "Edit Exam" : "Add Exam"}
-          </Dialog.Title>
-          <button onClick={onClose}>
-            <X />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium">Subject</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="mt-1 w-full border rounded px-2 py-1"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium">Score</label>
-            <input
-              type="number"
-              value={score}
-              onChange={(e) =>
-                setScore(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              className="mt-1 w-full border rounded px-2 py-1"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium">Max Score</label>
-            <input
-              type="number"
-              value={maxScore}
-              onChange={(e) =>
-                setMaxScore(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              className="mt-1 w-full border rounded px-2 py-1"
-              required
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 mt-4">
+    <Dialog open={true} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="mx-auto max-w-sm rounded bg-white p-6 shadow-xl w-full">
+          <div className="flex justify-between items-center mb-4">
+            <Dialog.Title className="text-lg font-bold text-black text-center w-full">
+              {exam ? "Edit Exam Record" : "Add New Exam Record"}
+            </Dialog.Title>
             <button
-              type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded"
+              className="text-gray-500 hover:text-black absolute right-6 top-6"
             >
-              Cancel
+              <X size={20} />
             </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Subject Name
+              </label>
+              <input
+                required
+                type="text"
+                placeholder="e.g. Mathematics"
+                className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.subjectName}
+                onChange={(e) =>
+                  setFormData({ ...formData, subjectName: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Score
+                </label>
+                <input
+                  required
+                  type="number"
+                  step="0.1"
+                  className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black"
+                  value={formData.score}
+                  onChange={(e) =>
+                    setFormData({ ...formData, score: Number(e.target.value) })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Max Score
+                </label>
+                <input
+                  required
+                  type="number"
+                  step="0.1"
+                  className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black"
+                  value={formData.maxScore}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      maxScore: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Date of Exam
+              </label>
+              <input
+                required
+                type="date"
+                className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black"
+                value={formData.date}
+                onChange={(e) =>
+                  setFormData({ ...formData, date: e.target.value })
+                }
+              />
+            </div>
+
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:bg-blue-300 flex justify-center items-center gap-2 font-medium transition-all"
             >
-              {exam ? "Update" : "Create"}
+              {loading && <Loader2 className="animate-spin" size={18} />}
+              {exam ? "Update Details" : "Save Exam"}
             </button>
-          </div>
-        </form>
-      </Dialog.Panel>
+          </form>
+        </Dialog.Panel>
+      </div>
     </Dialog>
   );
 }

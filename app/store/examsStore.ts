@@ -7,9 +7,9 @@ import { Exam } from "@/generated/prisma";
  * to handle the display of the linked Subject relation.
  */
 export interface RichExam extends Exam {
-  subjectName?: string; // For UI display
-  score: number;        // Explicitly number (Prisma Float)
-  maxScore: number;     // Explicitly number (Prisma Float)
+  subjectName?: string; 
+  score: number;       
+  maxScore: number;    
 }
 
 interface ExamState {
