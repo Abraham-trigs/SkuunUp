@@ -189,7 +189,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
 
       if (step === 0) {
         if (get().userCreated && get().formData.applicationId) {
-          await updateAdmissionClient(get().formData.applicationId, 0, payload);
+          await updateAdmissionClient(get().formData.applicationId ?? null, 0, payload);
         } else {
           const res = await updateAdmissionClient(null, 0, payload, true);
           set((state) => ({
@@ -204,7 +204,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       } else {
         const appId = get().formData.applicationId;
         if (!appId) throw new Error("Missing applicationId for update");
-        await updateAdmissionClient(appId, step, payload);
+        await updateAdmissionClient(appId ?? null, step, payload);
       }
 
       set((state) => ({
@@ -226,11 +226,11 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       const schoolId = useAuthStore.getState().user?.school?.id;
       if (!schoolId) throw new Error("Unauthorized");
 
-      const data = await updateAdmissionClient(applicationId, undefined, undefined, false, true);
+      const data = await updateAdmissionClient(applicationId ?? null, undefined, undefined, false, true);
 
       const classesStore = useClassesStore.getState();
-      const selectedClass = classesStore.classes.find(c => c.id === data.classId);
-      const selectedGrade = selectedClass?.grades?.find(g => g.id === data.gradeId);
+      const selectedClass = classesStore.classes.find((c) => c.id === data.classId);
+      const selectedGrade = selectedClass?.grades?.find((g) => g.id === data.gradeId);
       data.className = selectedClass?.name;
       data.gradeName = selectedGrade?.name;
 
@@ -245,7 +245,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   deleteAdmission: async (applicationId) => {
     set({ loading: true, errors: {} });
     try {
-      await updateAdmissionClient(applicationId, undefined, undefined, false, false, "DELETE");
+      await updateAdmissionClient(applicationId ?? null, undefined, undefined, false, false, "DELETE");
       set({ formData: admissionFormSchema.parse({}), userCreated: false, gradesForSelectedClass: [] });
       return true;
     } catch (err: any) {
@@ -264,15 +264,15 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     let gradeName: string | undefined;
 
     if (admission.classId) {
-      const selectedClass = classesStore.classes.find(c => c.id === admission.classId);
+      const selectedClass = classesStore.classes.find((c) => c.id === admission.classId);
       className = selectedClass?.name;
 
       const gradeList = selectedClass?.grades || [];
       if (admission.gradeId) {
-        const selectedGrade = gradeList.find(g => g.id === admission.gradeId);
+        const selectedGrade = gradeList.find((g) => g.id === admission.gradeId);
         gradeName = selectedGrade?.name;
       } else {
-        const firstAvailableGrade = gradeList.find(g => g.enrolled < g.capacity);
+        const firstAvailableGrade = gradeList.find((g) => g.enrolled < g.capacity);
         gradeName = firstAvailableGrade?.name;
       }
     }
@@ -287,7 +287,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     get().optimisticUpdate(
       "familyMembers",
       (prev = []) => [...prev, member],
-      () => updateAdmissionClient(get().formData.applicationId!, 6, { familyMembers: [...(get().formData.familyMembers || []), member] })
+      () => updateAdmissionClient(get().formData.applicationId ?? null, 6, { familyMembers: [...(get().formData.familyMembers || []), member] })
     );
   },
 
@@ -295,7 +295,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     get().optimisticUpdate(
       "familyMembers",
       (prev = []) => prev.filter((_, i) => i !== idx),
-      () => updateAdmissionClient(get().formData.applicationId!, 6, { familyMembers: [...(get().formData.familyMembers || [])].filter((_, i) => i !== idx) })
+      () => updateAdmissionClient(get().formData.applicationId ?? null, 6, { familyMembers: [...(get().formData.familyMembers || [])].filter((_, i) => i !== idx) })
     );
   },
 
@@ -303,7 +303,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     get().optimisticUpdate(
       "previousSchools",
       (prev = []) => [...prev, school],
-      () => updateAdmissionClient(get().formData.applicationId!, 6, { previousSchools: [...(get().formData.previousSchools || []), school] })
+      () => updateAdmissionClient(get().formData.applicationId ?? null, 6, { previousSchools: [...(get().formData.previousSchools || []), school] })
     );
   },
 
@@ -311,13 +311,13 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     get().optimisticUpdate(
       "previousSchools",
       (prev = []) => prev.filter((_, i) => i !== idx),
-      () => updateAdmissionClient(get().formData.applicationId!, 6, { previousSchools: [...(get().formData.previousSchools || [])].filter((_, i) => i !== idx) })
+      () => updateAdmissionClient(get().formData.applicationId ?? null, 6, { previousSchools: [...(get().formData.previousSchools || [])].filter((_, i) => i !== idx) })
     );
   },
 
   setClass: (classId: string, grades?: GradeWithApplications[]) => {
     const classesStore = useClassesStore.getState();
-    const selectedClass = classesStore.classes.find(c => c.id === classId);
+    const selectedClass = classesStore.classes.find((c) => c.id === classId);
 
     if (!selectedClass) {
       set((state) => ({
