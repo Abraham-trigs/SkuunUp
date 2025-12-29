@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Subject } from "@prisma/client";
+import { Subject } from "@/generated/prisma";
 import { debounce } from "lodash";
 
 interface SubjectFilters {
