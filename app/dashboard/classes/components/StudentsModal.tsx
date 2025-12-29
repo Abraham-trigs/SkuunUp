@@ -1,6 +1,6 @@
-// app/classes/components/StudentsModal.tsx
 "use client";
 
+import React from "react";
 import {
   Dialog,
   DialogBackdrop,
@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@headlessui/react";
 import { useState, useEffect, useMemo } from "react";
-import { useClassesStore } from "@/app/store/useClassesStore";
+import { useStudentStore, StudentListItem } from "@/app/store/useStudentStore";
 import { useRouter } from "next/navigation";
 
 interface StudentsModalProps {
@@ -24,7 +24,7 @@ export default function StudentsModal({
   classId,
   className,
 }: StudentsModalProps) {
-  const { fetchStudents, students, loading } = useClassesStore();
+  const { fetchStudents, students, loading } = useStudentStore();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const router = useRouter();
@@ -37,39 +37,49 @@ export default function StudentsModal({
 
   // Fetch students when modal opens
   useEffect(() => {
-    if (isOpen && classId) fetchStudents(classId);
+    if (isOpen && classId) fetchStudents({ classId });
   }, [isOpen, classId, fetchStudents]);
 
+  // Normalize strings for search
   const normalize = (str: string) =>
     str
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase();
 
+  // Derive full name from user object
+  const getStudentFullName = (s: StudentListItem) =>
+    [s.user?.firstName, s.user?.otherNames, s.user?.surname]
+      .filter(Boolean)
+      .join(" ") || "Unnamed Student";
+
+  // Filtered students based on search
   const filteredStudents = useMemo(() => {
     const term = normalize(debouncedSearch.trim());
-    if (!term) return students.filter((s) => s.user?.name);
-    return students.filter((s) => normalize(s.user?.name ?? "").includes(term));
+    if (!term) return students;
+    return students.filter((s) =>
+      normalize(getStudentFullName(s)).includes(term)
+    );
   }, [students, debouncedSearch]);
 
+  // Highlight search matches
   const highlightMatches = (name: string) => {
     const term = normalize(debouncedSearch.trim());
     if (!term) return name;
 
     const normalizedName = normalize(name);
-    const result: JSX.Element[] = [];
+    const result: React.ReactNode[] = [];
     let lastIndex = 0;
     const regex = new RegExp(term, "gi");
-    let match;
+    let match: RegExpExecArray | null;
 
     while ((match = regex.exec(normalizedName)) !== null) {
       const start = match.index;
       const end = start + match[0].length;
 
-      if (start > lastIndex)
-        result.push(
-          <span key={lastIndex}>{name.slice(lastIndex, start)}</span>
-        );
+      if (start > lastIndex) {
+        result.push(name.slice(lastIndex, start));
+      }
 
       result.push(
         <span key={start} className="bg-yellow-200">
@@ -80,12 +90,12 @@ export default function StudentsModal({
       lastIndex = end;
     }
 
-    if (lastIndex < name.length)
-      result.push(<span key={lastIndex}>{name.slice(lastIndex)}</span>);
+    if (lastIndex < name.length) {
+      result.push(name.slice(lastIndex));
+    }
 
     return result;
   };
-
   if (!isOpen) return null;
 
   return (
@@ -122,14 +132,11 @@ export default function StudentsModal({
                   key={s.id}
                   className="px-2 py-1 border rounded cursor-pointer hover:bg-gray-100"
                   onClick={() => {
-                    const studentId = s.studentId ?? s.id;
-                    router.push(`/dashboard/students/${studentId}`);
+                    router.push(`/dashboard/students/${s.id}`);
                     onClose();
                   }}
                 >
-                  {s.user?.name
-                    ? highlightMatches(s.user.name)
-                    : "Unnamed Student"}
+                  {highlightMatches(getStudentFullName(s))}
                 </li>
               ))}
             </ul>
