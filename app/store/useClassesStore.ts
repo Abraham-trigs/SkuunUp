@@ -19,24 +19,27 @@ export type AttendanceRecord = {
   remarks?: string;
 };
 
+// Extend Prisma Class with optional students
+export type ClassWithStudents = Class & { students?: StudentListItem[] };
+
 interface ClassesStore {
-  classes: Class[];
+  classes: ClassWithStudents[];
   total: number;
   page: number;
   perPage: number;
   loading: boolean;
   error: string | null;
 
-  selectedClass: Class | null;
+  selectedClass: ClassWithStudents | null;
   students: StudentListItem[];
   attendance: AttendanceRecord[];
   grades: Grade[];
 
   search: string;
-  sortBy: "name" | "createdAt";
+  sortBy: "name" | "createdAt" | "studentCount";
   sortOrder: "asc" | "desc";
   dateFilter?: string;
-  cache: Record<string, Class[]>;
+  cache: Record<string, ClassWithStudents[]>;
 
   // ------------------ Fetching ------------------
   fetchClasses: (page?: number, perPage?: number, search?: string) => Promise<void>;
@@ -67,16 +70,16 @@ interface ClassesStore {
   ) => Promise<void>;
 
   // ------------------ Helpers ------------------
-  selectClass: (cls: Class) => void;
+  selectClass: (cls: ClassWithStudents) => void;
   clearSelectedClass: () => void;
 
-  setClassData: (
-    updatedClass: Class & { students?: any[]; grades?: Grade[] }
-  ) => void;
+  setClassData: (updatedClass: ClassWithStudents) => void;
 
   setSearch: (search: string) => void;
-  setSort: (sortBy: "name" | "createdAt", sortOrder: "asc" | "desc") => void;
+  setSort: (sortBy: "name" | "createdAt" | "studentCount", sortOrder: "asc" | "desc") => void;
   setDateFilter: (date?: string) => void;
+
+  sortClassesByClientKey: (key: "name" | "studentCount", order: "asc" | "desc") => void;
 }
 
 // ------------------ Store ------------------
@@ -102,7 +105,6 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   // ------------------ Fetching ------------------
   fetchClasses: async (page = get().page, perPage = get().perPage, search = get().search) => {
     set({ loading: true, error: null });
-
     const { sortBy, sortOrder, dateFilter, cache } = get();
     const cacheKey = `${page}-${perPage}-${search}-${sortBy}-${sortOrder}-${dateFilter}`;
 
@@ -116,7 +118,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
         `/api/classes?page=${page}&perPage=${perPage}&search=${encodeURIComponent(search)}`
       );
 
-      const normalized = res.data.classes.map((cls: any) => ({
+      const normalized: ClassWithStudents[] = res.data.classes.map((cls: any) => ({
         ...cls,
         students: cls.students || [],
       }));
@@ -138,10 +140,10 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await axios.get(`/api/classes/${id}`);
-      const cls = res.data;
+      const cls: ClassWithStudents = { ...res.data, students: res.data.students || [] };
 
       set({
-        selectedClass: { ...cls, students: cls.students || [] },
+        selectedClass: cls,
         grades: cls.grades || [],
         students: cls.students || [],
         loading: false,
@@ -155,7 +157,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ loading: true });
     try {
       const studentStore = useStudentStore.getState();
-      await studentStore.fetchStudents(1, 50,"");
+      await studentStore.fetchStudents(1, 50, "");
       set({
         students: studentStore.students.filter((s) => s.classId === classId),
         loading: false,
@@ -168,9 +170,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   fetchAttendance: async (classId, date) => {
     set({ loading: true });
     try {
-      const res = await axios.get(
-        `/api/classes/${classId}/attendance?date=${date ?? ""}`
-      );
+      const res = await axios.get(`/api/classes/${classId}/attendance?date=${date ?? ""}`);
       set({ attendance: res.data || [], loading: false });
     } catch (err: any) {
       set({ error: err.response?.data?.error || err.message, loading: false });
@@ -199,16 +199,12 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await axios.put(`/api/classes/${id}`, { name });
-      const updatedClass = res.data;
+      const updatedClass: ClassWithStudents = res.data;
 
       set((state) => ({
-        classes: state.classes.map((c) =>
-          c.id === id ? { ...c, ...updatedClass } : c
-        ),
+        classes: state.classes.map((c) => (c.id === id ? { ...c, ...updatedClass } : c)),
         selectedClass:
-          state.selectedClass?.id === id
-            ? { ...state.selectedClass, ...updatedClass }
-            : state.selectedClass,
+          state.selectedClass?.id === id ? { ...state.selectedClass, ...updatedClass } : state.selectedClass,
         cache: {},
         loading: false,
       }));
@@ -223,9 +219,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
 
   setClassData: (updatedClass) => {
     set((state) => ({
-      classes: state.classes.map((c) =>
-        c.id === updatedClass.id ? { ...c, ...updatedClass } : c
-      ),
+      classes: state.classes.map((c) => (c.id === updatedClass.id ? { ...c, ...updatedClass } : c)),
       selectedClass:
         state.selectedClass?.id === updatedClass.id
           ? { ...state.selectedClass, ...updatedClass }
@@ -273,9 +267,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   deleteGrade: async (classId, gradeId) => {
     try {
       await axios.delete(`/api/classes/${classId}/grades/${gradeId}`);
-      set((state) => ({
-        grades: state.grades.filter((g) => g.id !== gradeId),
-      }));
+      set((state) => ({ grades: state.grades.filter((g) => g.id !== gradeId) }));
       return true;
     } catch {
       return false;
@@ -295,16 +287,10 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
 
   // ------------------ Helpers ------------------
   selectClass: (cls) => {
-    set({
-      selectedClass: cls,
-      grades: [],
-      students: [],
-      attendance: [],
-    });
+    set({ selectedClass: cls, grades: [], students: [], attendance: [] });
   },
 
-  clearSelectedClass: () =>
-    set({ selectedClass: null, grades: [], students: [], attendance: [] }),
+  clearSelectedClass: () => set({ selectedClass: null, grades: [], students: [], attendance: [] }),
 
   setSearch: (search) => {
     set({ search, page: 1 });
@@ -320,5 +306,16 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ dateFilter: date });
     get().fetchClasses(1);
   },
-}));
 
+  sortClassesByClientKey: (key, order) => {
+    const sorted = [...get().classes].sort((a, b) => {
+      if (key === "studentCount") {
+        return order === "asc"
+          ? (a.students?.length || 0) - (b.students?.length || 0)
+          : (b.students?.length || 0) - (a.students?.length || 0);
+      }
+      return 0;
+    });
+    set({ classes: sorted, sortBy: key as any, sortOrder: order });
+  },
+}));

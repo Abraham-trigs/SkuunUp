@@ -1,153 +1,97 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React from "react";
 
-interface ClassData {
+export interface ClassTableRow {
   id: string;
   name: string;
-  school: { id: string; name: string };
-  students: { id: string; name: string }[];
+  students?: any[];
 }
 
 interface ClassesTableProps {
-  classes?: ClassData[]; // optional, default to []
-  onEdit: (cls: ClassData) => void;
-  onDelete: (cls: ClassData) => void;
-  onViewStudents: (cls: ClassData) => void;
+  classes: ClassTableRow[];
+  sortBy: string;
+  sortOrder: "asc" | "desc";
+  onSort: (key: string) => void;
+  onEdit: (cls: ClassTableRow) => void;
+  onDelete: (cls: ClassTableRow) => void;
+  onViewStudents: (cls: ClassTableRow) => void;
 }
 
-export default function ClassesTable({
-  classes = [],
+export const ClassesTable: React.FC<ClassesTableProps> = ({
+  classes,
+  sortBy,
+  sortOrder,
+  onSort,
   onEdit,
   onDelete,
   onViewStudents,
-}: ClassesTableProps) {
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<"name" | "students">("name");
-  const [sortAsc, setSortAsc] = useState(true);
-
-  // Pagination
-  const [page, setPage] = useState(1);
-  const perPage = 5;
-
-  // Filtered and sorted classes
-  const filteredSorted = useMemo(() => {
-    return classes
-      .filter((cls) =>
-        cls.name.toLowerCase().includes(search.toLowerCase())
-      )
-      .sort((a, b) => {
-        const aVal = sortKey === "name" ? a.name : a.students.length;
-        const bVal = sortKey === "name" ? b.name : b.students.length;
-        if (aVal < bVal) return sortAsc ? -1 : 1;
-        if (aVal > bVal) return sortAsc ? 1 : -1;
-        return 0;
-      });
-  }, [classes, search, sortKey, sortAsc]);
-
-  const totalPages = Math.ceil(filteredSorted.length / perPage);
-  const paginated = filteredSorted.slice((page - 1) * perPage, page * perPage);
-
-  const toggleSort = (key: "name" | "students") => {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else {
-      setSortKey(key);
-      setSortAsc(true);
-    }
-  };
-
+}) => {
   return (
-    <div className="space-y-4">
-      {/* Search */}
-      <input
-        type="text"
-        placeholder="Search classes..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="px-3 py-2 border rounded-md focus:outline-none focus:ring focus:ring-ford-primary w-full md:w-64"
-      />
-
-      {/* Table */}
-      <table className="w-full table-auto border-collapse">
+    <div className="overflow-x-auto border rounded-2xl shadow-2xl">
+      <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="bg-ford-primary text-white">
+          <tr className="bg-[#1c376e]">
             <th
-              className="px-4 py-2 cursor-pointer"
-              onClick={() => toggleSort("name")}
+              className="px-6 py-4 cursor-pointer"
+              onClick={() => onSort("name")}
             >
-              Name {sortKey === "name" ? (sortAsc ? "↑" : "↓") : ""}
+              <div className="flex items-center gap-2 text-xs font-black uppercase text-[#BFCDEF]">
+                Class Name
+                <span className="text-[#6BE8EF]">
+                  {sortBy === "name" ? (sortOrder === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </div>
             </th>
-            <th className="px-4 py-2">School</th>
             <th
-              className="px-4 py-2 cursor-pointer"
-              onClick={() => toggleSort("students")}
+              className="px-6 py-4 cursor-pointer"
+              onClick={() => onSort("studentCount")}
             >
-              Students {sortKey === "students" ? (sortAsc ? "↑" : "↓") : ""}
+              <div className="flex items-center gap-2 text-xs font-black uppercase text-[#BFCDEF]">
+                Students
+                <span className="text-[#6BE8EF]">
+                  {sortBy === "studentCount"
+                    ? sortOrder === "asc"
+                      ? "↑"
+                      : "↓"
+                    : "↕"}
+                </span>
+              </div>
             </th>
-            <th className="px-4 py-2">Actions</th>
+            <th className="px-6 py-4 text-right text-xs font-black uppercase text-[#BFCDEF]">
+              Actions
+            </th>
           </tr>
         </thead>
-        <tbody>
-          {paginated.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="px-4 py-2 text-center text-gray-500">
-                No classes found.
+        <tbody className="divide-y divide-white/5">
+          {classes.map((cls) => (
+            <tr key={cls.id} className="hover:bg-gray-50">
+              <td className="px-4 py-2">{cls.name}</td>
+              <td className="px-4 py-2">{cls.students?.length || 0}</td>
+              <td className="px-4 py-2 flex gap-2 justify-end">
+                <button
+                  onClick={() => onEdit(cls)}
+                  className="px-2 py-1 rounded bg-yellow-400 text-white hover:bg-yellow-500"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => onDelete(cls)}
+                  className="px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => onViewStudents(cls)}
+                  className="px-3 py-1 bg-ford-primary text-white rounded hover:bg-ford-secondary"
+                >
+                  Students
+                </button>
               </td>
             </tr>
-          ) : (
-            paginated.map((cls) => (
-              <tr key={cls.id} className="border-b hover:bg-gray-50">
-                <td className="px-4 py-2">{cls.name}</td>
-                <td className="px-4 py-2">{cls.school.name}</td>
-                <td className="px-4 py-2">{cls.students.length}</td>
-                <td className="px-4 py-2 flex gap-2">
-                  <button
-                    onClick={() => onEdit(cls)}
-                    className="px-2 py-1 rounded bg-yellow-400 text-white hover:bg-yellow-500"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => onDelete(cls)}
-                    className="px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => onViewStudents(cls)}
-                    className="px-2 py-1 rounded bg-ford-secondary text-white hover:bg-ford-primary"
-                  >
-                    Students
-                  </button>
-                </td>
-              </tr>
-            ))
-          )}
+          ))}
         </tbody>
       </table>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-end gap-2 mt-2">
-          <button
-            disabled={page === 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="px-3 py-1 rounded border disabled:opacity-50"
-          >
-            Prev
-          </button>
-          <span className="px-2 py-1">
-            {page} / {totalPages}
-          </span>
-          <button
-            disabled={page === totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="px-3 py-1 rounded border disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      )}
     </div>
   );
-}
+};
