@@ -1,11 +1,8 @@
-// app/store/useClassesStore.ts
-// Purpose: Centralized classes store with full CRUD, grades, attendance, search, sorting, and normalized students
-
 "use client";
 
 import { create } from "zustand";
 import axios from "axios";
-import { Class, Grade } from "@/generated/prisma";
+import { Class, Grade, Application } from "@/generated/prisma";
 import { useStudentStore, StudentListItem } from "./useStudentStore";
 
 // ------------------ Types ------------------
@@ -22,6 +19,9 @@ export type AttendanceRecord = {
 // Extend Prisma Class with optional students
 export type ClassWithStudents = Class & { students?: StudentListItem[] };
 
+// Include Applications in Grade for type safety
+export type GradeWithApplications = Grade & { Application?: Application[] };
+
 interface ClassesStore {
   classes: ClassWithStudents[];
   total: number;
@@ -33,7 +33,7 @@ interface ClassesStore {
   selectedClass: ClassWithStudents | null;
   students: StudentListItem[];
   attendance: AttendanceRecord[];
-  grades: Grade[];
+  grades: GradeWithApplications[];
 
   search: string;
   sortBy: "name" | "createdAt" | "studentCount";
@@ -59,8 +59,8 @@ interface ClassesStore {
 
   deleteClass: (id: string) => Promise<void>;
 
-  createGrade: (classId: string, name: string) => Promise<Grade | null>;
-  updateGrade: (classId: string, gradeId: string, name: string) => Promise<Grade | null>;
+  createGrade: (classId: string, name: string) => Promise<GradeWithApplications | null>;
+  updateGrade: (classId: string, gradeId: string, name: string) => Promise<GradeWithApplications | null>;
   deleteGrade: (classId: string, gradeId: string) => Promise<boolean>;
 
   markAttendance: (
@@ -142,9 +142,15 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
       const res = await axios.get(`/api/classes/${id}`);
       const cls: ClassWithStudents = { ...res.data, students: res.data.students || [] };
 
+      // Ensure grades include Applications
+      const grades: GradeWithApplications[] = (res.data.grades || []).map((g: any) => ({
+        ...g,
+        Application: g.Application || [],
+      }));
+
       set({
         selectedClass: cls,
-        grades: cls.grades || [],
+        grades,
         students: cls.students || [],
         loading: false,
       });
@@ -258,7 +264,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     try {
       const res = await axios.put(`/api/classes/${classId}/grades/${gradeId}`, { name });
       set({ grades: res.data.grades || [] });
-      return res.data.grades?.find((g: Grade) => g.id === gradeId) ?? null;
+      return res.data.grades?.find((g: GradeWithApplications) => g.id === gradeId) ?? null;
     } catch {
       return null;
     }
