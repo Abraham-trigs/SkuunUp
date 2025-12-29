@@ -2,11 +2,11 @@
 // Purpose: Centralized SkuunAi API endpoint managing sessions, messages, AI actions, and automatic recommendations.
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db.ts";
-import { SchoolAccount } from "@/lib/schoolAccount.ts";
+import { prisma } from "@/lib/db";
+import { SchoolAccount } from "@/lib/schoolAccount";
 import { z } from "zod";
-import { AIActionType } from "@/lib/types/skuunAiTypes.ts";
-import { determineAutoActions, triggerAutoActions } from "@/lib/skuunAiAutoActions.ts";
+import { AIActionType, Role } from "@/lib/types/skuunAiTypes";
+import { determineAutoActions, triggerAutoActions } from "@/lib/skuunAiAutoActions";
 
 // -------------------- Zod Schemas --------------------
 const sendMessageSchema = z.object({
@@ -25,10 +25,6 @@ const querySchema = z.object({
 });
 
 // -------------------- Helper: Generate Recommendations --------------------
-/**
- * Generates AI recommendations for a given session and action type.
- * Inserts recommendations into the database and skips duplicates.
- */
 async function generateRecommendations(
   sessionId: string,
   actionType: AIActionType,
@@ -38,7 +34,7 @@ async function generateRecommendations(
     category: string;
     message: string;
     data?: any;
-    targetId?: string;
+    targetId?: string | null;
   }[] = [];
 
   const normalizedPayload = typeof payload === "object" ? payload : { message: payload };
@@ -49,7 +45,7 @@ async function generateRecommendations(
         category: "Attendance",
         message: "Student may be at risk of chronic absenteeism. Suggest parental notification.",
         data: normalizedPayload,
-        targetId: normalizedPayload.studentId,
+        targetId: normalizedPayload.studentId ?? null,
       });
       break;
     case AIActionType.FLAG_SPECIAL_NEEDS:
@@ -57,7 +53,7 @@ async function generateRecommendations(
         category: "Student Support",
         message: "Student flagged with special needs. Assign counselor and adjust learning plan.",
         data: normalizedPayload,
-        targetId: normalizedPayload.studentId,
+        targetId: normalizedPayload.studentId ?? null,
       });
       break;
     case AIActionType.FINANCIAL_INSIGHTS:
@@ -65,7 +61,7 @@ async function generateRecommendations(
         category: "Finance",
         message: "Outstanding payments detected. Send reminder notifications to parents.",
         data: normalizedPayload,
-        targetId: normalizedPayload.studentId,
+        targetId: normalizedPayload.studentId ?? null,
       });
       break;
     case AIActionType.CHAT_QA:
@@ -73,6 +69,7 @@ async function generateRecommendations(
         category: "AI Chat",
         message: "AI responded to user query with suggested guidance.",
         data: normalizedPayload,
+        targetId: null,
       });
       break;
     default:
@@ -80,6 +77,7 @@ async function generateRecommendations(
         category: "General",
         message: `Action ${actionType} executed. Review insights in dashboard.`,
         data: normalizedPayload,
+        targetId: null,
       });
   }
 
@@ -91,7 +89,7 @@ async function generateRecommendations(
       category: rec.category,
       message: rec.message,
       data: rec.data,
-      targetId: rec.targetId || null,
+      targetId: rec.targetId,
     })),
     skipDuplicates: true,
   });
@@ -109,7 +107,6 @@ export async function GET(req: NextRequest) {
     const page = Number(query.page || 1);
     const perPage = Number(query.perPage || 10);
 
-    // FIXED: Use .info.id to match SchoolAccount class getters
     const total = await prisma.skuunAiSession.count({
       where: { userId: schoolAccount.info.id },
     });
@@ -122,7 +119,18 @@ export async function GET(req: NextRequest) {
       include: { messages: true, actions: true, SkuunAiRecommendation: true },
     });
 
-    return NextResponse.json({ sessions, total, page, perPage });
+    // Normalize dates and role
+    const normalized = sessions.map((s) => ({
+      ...s,
+      role: s.role as Role,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+      messages: s.messages.map((m) => ({ ...m, createdAt: m.createdAt, updatedAt: m.updatedAt })),
+      actions: s.actions.map((a) => ({ ...a, createdAt: a.createdAt, updatedAt: a.updatedAt, executedAt: a.executedAt ?? undefined })),
+      SkuunAiRecommendation: s.SkuunAiRecommendation.map((r) => ({ ...r, createdAt: r.createdAt, updatedAt: r.updatedAt })),
+    }));
+
+    return NextResponse.json({ sessions: normalized, total, page, perPage });
   } catch (err: any) {
     if (err instanceof z.ZodError)
       return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
@@ -139,13 +147,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     let sessionId: string;
 
-    // -------------------- Case: User message --------------------
     if ("content" in body) {
+      // User message
       const data = sendMessageSchema.parse(body);
 
       const session = await prisma.skuunAiSession.create({
         data: {
-          // FIXED: Use SchoolAccount getters and remove schoolId (missing in model)
           userId: schoolAccount.info.id,
           role: schoolAccount.role,
           messages: { create: { content: data.content, type: data.type, sender: "USER" } },
@@ -155,18 +162,14 @@ export async function POST(req: NextRequest) {
 
       sessionId = session.id;
 
-      // Determine auto AI actions based on content and account role
       const autoActions = determineAutoActions(data.content, schoolAccount.role);
       if (autoActions.length) await triggerAutoActions(sessionId, autoActions, { message: data.content });
 
-      await Promise.all(
-        autoActions.map((actionType) =>
-          generateRecommendations(sessionId, actionType, { message: data.content })
-        )
-      );
-    }
-    // -------------------- Case: Direct AI action --------------------
-    else if ("type" in body) {
+      await Promise.all(autoActions.map((actionType) =>
+        generateRecommendations(sessionId, actionType, { message: data.content })
+      ));
+    } else if ("type" in body) {
+      // Direct AI action
       const data = triggerActionSchema.parse(body);
 
       const session = await prisma.skuunAiSession.create({
@@ -190,12 +193,19 @@ export async function POST(req: NextRequest) {
       include: { messages: true, actions: true, SkuunAiRecommendation: true },
     });
 
-    return NextResponse.json(updatedSession, { status: 201 });
+    // Normalize role and dates for store
+    const normalized = {
+      ...updatedSession,
+      role: updatedSession.role as Role,
+      messages: updatedSession.messages.map((m) => ({ ...m, createdAt: m.createdAt, updatedAt: m.updatedAt })),
+      actions: updatedSession.actions.map((a) => ({ ...a, createdAt: a.createdAt, updatedAt: a.updatedAt, executedAt: a.executedAt ?? undefined })),
+      SkuunAiRecommendation: updatedSession.SkuunAiRecommendation.map((r) => ({ ...r, createdAt: r.createdAt, updatedAt: r.updatedAt })),
+    };
+
+    return NextResponse.json(normalized, { status: 201 });
   } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      // FIXED: Use .issues for 2025 Zod compatibility
+    if (err instanceof z.ZodError)
       return NextResponse.json({ error: { message: "Validation failed", details: err.issues } }, { status: 400 });
-    }
     return NextResponse.json({ error: err.message || "Failed to process request" }, { status: 500 });
   }
 }
