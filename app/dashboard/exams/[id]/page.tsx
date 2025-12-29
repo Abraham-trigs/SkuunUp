@@ -170,6 +170,7 @@ export default function StudentExamsPage() {
       {deleteModal.isOpen && deleteModal.data && (
         <ConfirmDeleteExamModal
           exam={deleteModal.data}
+          isOpen={deleteModal.isOpen} // <-- add this
           onClose={deleteModal.close}
           onConfirm={handleDelete}
         />
