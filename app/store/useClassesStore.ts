@@ -16,12 +16,16 @@ export type AttendanceRecord = {
   remarks?: string;
 };
 
-// Extend Prisma Class with optional students
-export type ClassWithStudents = Class & { students?: StudentListItem[] };
+// Extend Prisma Class with optional students & grades
+export type ClassWithStudents = Class & { 
+  students?: StudentListItem[];
+  grades?: GradeWithApplications[];
+};
 
 // Include Applications in Grade for type safety
 export type GradeWithApplications = Grade & { Application?: Application[] };
 
+// ------------------ Store Interface ------------------
 interface ClassesStore {
   classes: ClassWithStudents[];
   total: number;
@@ -48,41 +52,27 @@ interface ClassesStore {
   fetchAttendance: (classId: string, date?: string) => Promise<void>;
 
   // ------------------ Mutations ------------------
-  createClass: (
-    name: string
-  ) => Promise<{ success: boolean; data?: Class; error?: string }>;
-
-  updateClass: (
-    id: string,
-    name?: string
-  ) => Promise<{ success: boolean; data?: Class; error?: string }>;
-
+  createClass: (name: string) => Promise<{ success: boolean; data?: Class; error?: string }>;
+  updateClass: (id: string, name?: string) => Promise<{ success: boolean; data?: Class; error?: string }>;
   deleteClass: (id: string) => Promise<void>;
 
   createGrade: (classId: string, name: string) => Promise<GradeWithApplications | null>;
   updateGrade: (classId: string, gradeId: string, name: string) => Promise<GradeWithApplications | null>;
   deleteGrade: (classId: string, gradeId: string) => Promise<boolean>;
 
-  markAttendance: (
-    classId: string,
-    records: AttendanceRecord[],
-    date?: string
-  ) => Promise<void>;
+  markAttendance: (classId: string, records: AttendanceRecord[], date?: string) => Promise<void>;
 
   // ------------------ Helpers ------------------
   selectClass: (cls: ClassWithStudents) => void;
   clearSelectedClass: () => void;
-
   setClassData: (updatedClass: ClassWithStudents) => void;
-
   setSearch: (search: string) => void;
   setSort: (sortBy: "name" | "createdAt" | "studentCount", sortOrder: "asc" | "desc") => void;
   setDateFilter: (date?: string) => void;
-
   sortClassesByClientKey: (key: "name" | "studentCount", order: "asc" | "desc") => void;
 }
 
-// ------------------ Store ------------------
+// ------------------ Store Implementation ------------------
 export const useClassesStore = create<ClassesStore>((set, get) => ({
   classes: [],
   total: 0,
@@ -114,13 +104,12 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
         return;
       }
 
-      const res = await axios.get(
-        `/api/classes?page=${page}&perPage=${perPage}&search=${encodeURIComponent(search)}`
-      );
+      const res = await axios.get(`/api/classes?page=${page}&perPage=${perPage}&search=${encodeURIComponent(search)}`);
 
       const normalized: ClassWithStudents[] = res.data.classes.map((cls: any) => ({
         ...cls,
         students: cls.students || [],
+        grades: cls.grades || [],
       }));
 
       set((state) => ({
@@ -140,17 +129,15 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await axios.get(`/api/classes/${id}`);
-      const cls: ClassWithStudents = { ...res.data, students: res.data.students || [] };
-
-      // Ensure grades include Applications
-      const grades: GradeWithApplications[] = (res.data.grades || []).map((g: any) => ({
-        ...g,
-        Application: g.Application || [],
-      }));
+      const cls: ClassWithStudents = { 
+        ...res.data, 
+        students: res.data.students || [],
+        grades: (res.data.grades || []).map((g: any) => ({ ...g, Application: g.Application || [] })),
+      };
 
       set({
         selectedClass: cls,
-        grades,
+        grades: cls.grades || [],
         students: cls.students || [],
         loading: false,
       });
@@ -188,11 +175,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await axios.post("/api/classes", { name });
-      set((state) => ({
-        classes: [res.data, ...state.classes],
-        cache: {},
-        loading: false,
-      }));
+      set((state) => ({ classes: [res.data, ...state.classes], cache: {}, loading: false }));
       return { success: true, data: res.data };
     } catch (err: any) {
       const error = err.response?.data?.error || err.message;
@@ -209,8 +192,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
 
       set((state) => ({
         classes: state.classes.map((c) => (c.id === id ? { ...c, ...updatedClass } : c)),
-        selectedClass:
-          state.selectedClass?.id === id ? { ...state.selectedClass, ...updatedClass } : state.selectedClass,
+        selectedClass: state.selectedClass?.id === id ? { ...state.selectedClass, ...updatedClass } : state.selectedClass,
         cache: {},
         loading: false,
       }));
@@ -226,10 +208,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   setClassData: (updatedClass) => {
     set((state) => ({
       classes: state.classes.map((c) => (c.id === updatedClass.id ? { ...c, ...updatedClass } : c)),
-      selectedClass:
-        state.selectedClass?.id === updatedClass.id
-          ? { ...state.selectedClass, ...updatedClass }
-          : state.selectedClass,
+      selectedClass: state.selectedClass?.id === updatedClass.id ? { ...state.selectedClass, ...updatedClass } : state.selectedClass,
       cache: {},
     }));
   },
@@ -292,34 +271,16 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
   },
 
   // ------------------ Helpers ------------------
-  selectClass: (cls) => {
-    set({ selectedClass: cls, grades: [], students: [], attendance: [] });
-  },
-
+  selectClass: (cls) => set({ selectedClass: cls, grades: [], students: [], attendance: [] }),
   clearSelectedClass: () => set({ selectedClass: null, grades: [], students: [], attendance: [] }),
-
-  setSearch: (search) => {
-    set({ search, page: 1 });
-    get().fetchClasses(1);
-  },
-
-  setSort: (sortBy, sortOrder) => {
-    set({ sortBy, sortOrder });
-    get().fetchClasses(get().page);
-  },
-
-  setDateFilter: (date) => {
-    set({ dateFilter: date });
-    get().fetchClasses(1);
-  },
-
+  setSearch: (search) => { set({ search, page: 1 }); get().fetchClasses(1); },
+  setSort: (sortBy, sortOrder) => { set({ sortBy, sortOrder }); get().fetchClasses(get().page); },
+  setDateFilter: (date) => { set({ dateFilter: date }); get().fetchClasses(1); },
   sortClassesByClientKey: (key, order) => {
     const sorted = [...get().classes].sort((a, b) => {
-      if (key === "studentCount") {
-        return order === "asc"
-          ? (a.students?.length || 0) - (b.students?.length || 0)
-          : (b.students?.length || 0) - (a.students?.length || 0);
-      }
+      if (key === "studentCount") return order === "asc"
+        ? (a.students?.length || 0) - (b.students?.length || 0)
+        : (b.students?.length || 0) - (a.students?.length || 0);
       return 0;
     });
     set({ classes: sorted, sortBy: key as any, sortOrder: order });

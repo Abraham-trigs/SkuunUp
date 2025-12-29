@@ -4,20 +4,15 @@
 import { useState, useEffect } from "react";
 import { useClassesStore } from "@/app/store/useClassesStore.ts";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
+import { GradeWithApplications } from "@/app/store/useClassesStore.ts";
 
 interface AssignClassGradeButtonProps {
   studentId: string;
   currentClassId?: string;
   currentGradeId?: string;
-  onAssigned?: () => void; // Callback to refresh page/store after assignment
+  onAssigned?: () => void;
 }
 
-// ------------------------------------------------------------------------
-// Purpose:
-// - Assign a class and grade to a student using the admission store logic.
-// - Updates progress automatically without duplicating logic.
-// - Calls optional onAssigned callback for immediate UI refresh.
-// ------------------------------------------------------------------------
 export default function AssignClassGradeButton({
   studentId,
   currentClassId,
@@ -27,12 +22,8 @@ export default function AssignClassGradeButton({
   const { classes, fetchClasses } = useClassesStore();
   const { setClass, selectGrade } = useAdmissionStore();
 
-  // Local state per button instance
-  const [selectedClass, setSelectedClass] = useState(currentClassId || "");
-  const [selectedGrade, setSelectedGrade] = useState(currentGradeId || "");
-  const [gradesForClass, setGradesForClass] = useState<
-    { id: string; name: string; capacity: number; enrolled: number }[]
-  >([]);
+  const [selectedClassId, setSelectedClassId] = useState(currentClassId || "");
+  const [selectedGradeId, setSelectedGradeId] = useState(currentGradeId || "");
   const [open, setOpen] = useState(false);
 
   // Load classes once
@@ -40,40 +31,41 @@ export default function AssignClassGradeButton({
     if (!classes.length) fetchClasses();
   }, [classes.length, fetchClasses]);
 
-  // Update grades when class changes
+  // Auto-update grade when class changes
   useEffect(() => {
-    if (!selectedClass) {
-      setGradesForClass([]);
-      setSelectedGrade("");
+    if (!selectedClassId) {
+      setSelectedGradeId("");
       return;
     }
-    const cls = classes.find((c) => c.id === selectedClass);
-    setGradesForClass(cls?.grades || []);
-    // Optionally default to first available grade
-    const available = cls?.grades?.find((g) => g.enrolled < g.capacity);
-    setSelectedGrade(available?.id || "");
-  }, [selectedClass, classes]);
 
-  // -------------------------
-  // Assign class & grade to student
-  // -------------------------
+    const cls = classes.find((c) => c.id === selectedClassId);
+    const availableGrade = cls?.grades?.find((g) => g.enrolled < g.capacity);
+    setSelectedGradeId(availableGrade?.id || "");
+  }, [selectedClassId, classes]);
+
   const handleAssign = async () => {
-    if (!selectedClass || !selectedGrade) return;
+    if (!selectedClassId || !selectedGradeId) return;
 
-    // Use admission store logic to set class and grade (updates progress internally)
-    setClass(selectedClass, gradesForClass);
-    selectGrade(selectedGrade, gradesForClass);
+    const cls = classes.find((c) => c.id === selectedClassId);
+    if (!cls || !cls.grades) return;
 
-    // Optional: refresh parent table/store after assignment
+    // Automatically pick the grade object based on selectedGradeId
+    const grade = cls.grades.find(
+      (g: GradeWithApplications) => g.id === selectedGradeId
+    );
+    if (!grade) return;
+
+    // Update admission store
+    setClass(cls.id, cls.grades); // sets selected class and available grades
+    selectGrade(grade.id, cls.grades); // sets selected grade
+
     if (onAssigned) await onAssigned();
 
-    // Close modal
     setOpen(false);
   };
 
   return (
     <>
-      {/* Trigger Button */}
       <button
         className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
         onClick={() => setOpen(true)}
@@ -81,7 +73,6 @@ export default function AssignClassGradeButton({
         Assign Class & Grade
       </button>
 
-      {/* Modal */}
       {open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
           <div className="bg-white p-6 rounded shadow-md w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -91,8 +82,8 @@ export default function AssignClassGradeButton({
             <div className="mb-4">
               <label className="block mb-1 font-medium">Class</label>
               <select
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
                 className="w-full border px-2 py-1 rounded"
               >
                 <option value="">Select Class</option>
@@ -108,17 +99,19 @@ export default function AssignClassGradeButton({
             <div className="mb-4">
               <label className="block mb-1 font-medium">Grade</label>
               <select
-                value={selectedGrade}
-                onChange={(e) => setSelectedGrade(e.target.value)}
+                value={selectedGradeId}
+                onChange={(e) => setSelectedGradeId(e.target.value)}
                 className="w-full border px-2 py-1 rounded"
-                disabled={!selectedClass || gradesForClass.length === 0}
+                disabled={!selectedClassId}
               >
                 <option value="">Select Grade</option>
-                {gradesForClass.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} (Enrolled: {g.enrolled}/{g.capacity})
-                  </option>
-                ))}
+                {classes
+                  .find((c) => c.id === selectedClassId)
+                  ?.grades?.map((g: GradeWithApplications) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} (Enrolled: {g.enrolled}/{g.capacity})
+                    </option>
+                  ))}
               </select>
             </div>
 
@@ -133,7 +126,7 @@ export default function AssignClassGradeButton({
               <button
                 className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
                 onClick={handleAssign}
-                disabled={!selectedClass || !selectedGrade}
+                disabled={!selectedClassId || !selectedGradeId}
               >
                 Assign
               </button>
@@ -144,11 +137,3 @@ export default function AssignClassGradeButton({
     </>
   );
 }
-
-/* ------------------------------------------------------------------------
-Design reasoning:
-- Reuses existing admission store logic to maintain progress calculation consistency.
-- Modal opens inline and handles its own state.
-- Optional `onAssigned` prop allows parent page to refresh student table after assignment.
-- Prevents assigning a class without both class and grade selected.
------------------------------------------------------------------------- */
