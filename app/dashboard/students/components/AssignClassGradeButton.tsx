@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import { useClassesStore } from "@/app/store/useClassesStore.ts";
 import { useAdmissionStore, GradeOption } from "@/app/store/admissionStore.ts";
+import { useStudentStore } from "@/app/store/useStudentStore.ts";
 
 interface AssignClassGradeButtonProps {
   studentId: string;
-  currentClassId?: string;
-  currentGradeId?: string;
+  currentClassId?: string | null;
+  currentGradeId?: string | null;
   onAssigned?: () => void;
 }
 
@@ -19,17 +20,18 @@ export default function AssignClassGradeButton({
 }: AssignClassGradeButtonProps) {
   const { classes, fetchClasses } = useClassesStore();
   const { setClass, selectGrade, gradesForSelectedClass } = useAdmissionStore();
+  const { updateStudent } = useStudentStore();
 
-  const [selectedClassId, setSelectedClassId] = useState(currentClassId || "");
-  const [selectedGradeId, setSelectedGradeId] = useState(currentGradeId || "");
+  const [selectedClassId, setSelectedClassId] = useState(currentClassId ?? "");
+  const [selectedGradeId, setSelectedGradeId] = useState(currentGradeId ?? "");
   const [open, setOpen] = useState(false);
 
-  // Load classes once
+  // Load classes if not already loaded
   useEffect(() => {
     if (!classes.length) fetchClasses();
   }, [classes.length, fetchClasses]);
 
-  // Auto-update grade when class changes
+  // Auto-select first available grade when class changes
   useEffect(() => {
     if (!selectedClassId) {
       setSelectedGradeId("");
@@ -39,7 +41,7 @@ export default function AssignClassGradeButton({
     const availableGrade = gradesForSelectedClass.find(
       (g) => g.enrolled < g.capacity
     );
-    setSelectedGradeId(availableGrade?.id || "");
+    setSelectedGradeId(availableGrade?.id ?? "");
   }, [selectedClassId, gradesForSelectedClass]);
 
   const handleAssign = async () => {
@@ -48,13 +50,22 @@ export default function AssignClassGradeButton({
     const cls = classes.find((c) => c.id === selectedClassId);
     if (!cls) return;
 
-    // Update admission store using gradesForSelectedClass
-    setClass(cls.id, cls.grades as any); // `as any` because store accepts GradeWithApplications[]
-    selectGrade(selectedGradeId, cls.grades as any);
+    try {
+      // Persist to student store (backend)
+      await updateStudent(studentId, {
+        classId: selectedClassId,
+        gradeId: selectedGradeId,
+      });
 
-    if (onAssigned) await onAssigned();
+      // Update local admission store for UI
+      setClass(cls.id, cls.grades as any);
+      selectGrade(selectedGradeId, cls.grades as any);
 
-    setOpen(false);
+      if (onAssigned) await onAssigned();
+      setOpen(false);
+    } catch (err) {
+      console.error("Failed to assign class/grade:", err);
+    }
   };
 
   return (

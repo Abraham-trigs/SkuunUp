@@ -59,6 +59,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/fast-json-stable-stringify": "^2.1.2",
     "@types/jest": "^30.0.0",
+    "@types/lodash": "^4.17.21",
     "@types/lodash.debounce": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19.2.7",
