@@ -316,7 +316,7 @@ gradeName = firstAvailableGrade?.name;      }
     );
   },
 
-  setClass: (classId: string, grades?: GradeWithApplications[]) => {
+setClass: (classId: string, grades?: GradeWithApplications[]) => {
     const classesStore = useClassesStore.getState();
     const selectedClass = classesStore.classes.find((c) => c.id === classId);
 
@@ -329,14 +329,14 @@ gradeName = firstAvailableGrade?.name;      }
     }
 
     const gradeList: GradeWithApplications[] = grades || selectedClass.grades || [];
-    const grade = gradeList.find(g => (g.capacity ?? 0) > (g.Application?.length ?? 0));
-
     const mappedGrades: GradeOption[] = gradeList.map((g) => ({
       id: g.id,
       name: g.name,
       capacity: g.capacity ?? 0,
       enrolled: g.Application?.length ?? 0,
     }));
+
+    const grade = mappedGrades.find((g) => g.enrolled < g.capacity);
 
     set((state) => ({
       formData: {
@@ -352,13 +352,12 @@ gradeName = firstAvailableGrade?.name;      }
   },
 
   selectGrade: (gradeId, grades) => {
-    const classesStore = useClassesStore.getState();
-    const gradeList: GradeWithApplications[] = grades || classesStore.classes.flatMap((c) => c.grades);
+    const gradeList: GradeOption[] = grades || get().gradesForSelectedClass;
     if (!gradeList || gradeList.length === 0) return;
 
     const grade = gradeId
-  ? gradeList.find((g) => g.id === gradeId)
-  : gradeList.find((g) => (g.Application?.length ?? 0) < (g.capacity ?? 0));
+      ? gradeList.find((g) => g.id === gradeId)
+      : gradeList.find((g) => g.enrolled < g.capacity);
     if (!grade) return;
 
     set((state) => ({
