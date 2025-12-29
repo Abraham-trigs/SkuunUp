@@ -11,12 +11,19 @@ import {
   Cell,
 } from "recharts";
 
+interface DataItem {
+  className: string;
+  count: number;
+}
+
 interface StudentsPerClassChartProps {
-  data: { className: string; count: number }[];
+  data: DataItem[];
+  onBarClick?: (data: DataItem) => void;
 }
 
 export default function StudentsPerClassChart({
   data,
+  onBarClick,
 }: StudentsPerClassChartProps) {
   return (
     <ResponsiveContainer width="100%" height={300}>
@@ -24,7 +31,6 @@ export default function StudentsPerClassChart({
         data={data}
         margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
       >
-        {/* Subtle grid using Deep Blue */}
         <CartesianGrid
           strokeDasharray="3 3"
           stroke="#1c376e"
@@ -33,7 +39,7 @@ export default function StudentsPerClassChart({
 
         <XAxis
           dataKey="className"
-          stroke="#BFCDEF" // --color-ark-lightblue
+          stroke="#BFCDEF"
           fontSize={12}
           tickLine={false}
           axisLine={false}
@@ -41,16 +47,16 @@ export default function StudentsPerClassChart({
         />
 
         <YAxis
-          stroke="#BFCDEF" // --color-ark-lightblue
+          stroke="#BFCDEF"
           fontSize={12}
           tickLine={false}
           axisLine={false}
         />
 
         <Tooltip
-          cursor={{ fill: "#1c376e", opacity: 0.4 }} // Highlight background on hover
+          cursor={{ fill: "#1c376e", opacity: 0.4 }}
           contentStyle={{
-            backgroundColor: "#03102b", // --color-ark-navy
+            backgroundColor: "#03102b",
             borderColor: "#1c376e",
             borderRadius: "8px",
             color: "#BFCDEF",
@@ -60,13 +66,19 @@ export default function StudentsPerClassChart({
 
         <Bar
           dataKey="count"
-          radius={[4, 4, 0, 0]} // Rounded corners on top
+          radius={[4, 4, 0, 0]}
+          style={{ cursor: "pointer" }}
+          onClick={(barData) => {
+            if (barData?.payload) {
+              onBarClick?.(barData.payload as DataItem);
+            }
+          }}
         >
-          {data.map((entry, index) => (
+          {data.map((_, index) => (
             <Cell
               key={`cell-${index}`}
-              fill="#6BE8EF" // --color-ark-cyan (Main Bar Color)
-              className="transition-all duration-300 hover:fill-[#E74C3C]" // Changes to Red on hover
+              fill="#6BE8EF"
+              className="transition-all duration-300 hover:fill-[#E74C3C]"
             />
           ))}
         </Bar>

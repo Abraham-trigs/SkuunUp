@@ -42,11 +42,6 @@ export default function StudentsPerClassChart({
           <BarChart
             data={data}
             margin={{ top: 5, right: 5, left: -25, bottom: 5 }}
-            onClick={(e) => {
-              if (e && e.activePayload?.[0]?.payload) {
-                onBarClick?.(e.activePayload[0].payload as DataItem);
-              }
-            }}
           >
             <XAxis
               dataKey="className"
@@ -73,16 +68,22 @@ export default function StudentsPerClassChart({
               }}
               itemStyle={{ color: "#6BE8EF" }}
             />
+
             <Bar
               dataKey="count"
               radius={[6, 6, 0, 0]}
               style={{ cursor: onBarClick ? "pointer" : "default" }}
+              onClick={(barData) => {
+                if (barData?.payload) {
+                  onBarClick?.(barData.payload as DataItem);
+                }
+              }}
             >
-              {data.map((entry, index) => (
+              {data.map((_, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill="#6BE8EF" // --color-ark-cyan
-                  className="transition-all duration-300 hover:fill-[#E74C3C]" // Transitions to Red on hover
+                  fill="#6BE8EF"
+                  className="transition-all duration-300 hover:fill-[#E74C3C]"
                 />
               ))}
             </Bar>

@@ -155,7 +155,7 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     set({ loading: true });
     try {
       const studentStore = useStudentStore.getState();
-      await studentStore.fetchStudents(1, 50, "");
+      await studentStore.fetchStudents(1, 50,"");
       set({
         students: studentStore.students.filter((s) => s.classId === classId),
         loading: false,
@@ -321,3 +321,4 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     get().fetchClasses(1);
   },
 }));
+
