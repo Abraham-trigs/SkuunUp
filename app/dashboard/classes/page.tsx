@@ -2,17 +2,21 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useClassesStore } from "@/app/store/useClassesStore.ts";
+import {
+  useClassesStore,
+  ClassWithStudents,
+} from "@/app/store/useClassesStore";
+import { StudentListItem } from "@/app/store/useStudentStore";
 
-import AddClassModal from "./components/AddClassModal.tsx";
-import EditClassModal from "./components/EditClassModal.tsx";
-import DeleteClassModal from "./components/DeleteClassModal.tsx";
-import StudentsModal from "./components/StudentsModal.tsx";
+import AddClassModal from "./components/AddClassModal";
+import EditClassModal from "./components/EditClassModal";
+import DeleteClassModal from "./components/DeleteClassModal";
+import StudentsModal from "./components/StudentsModal";
 
-import { ClassesTable, ClassTableRow } from "./components/ClassesTable.tsx";
-import { Pagination } from "@/app/dashboard/classes/components/Pagination.tsx";
-import { SearchInput } from "@/app/dashboard/classes/components/SearchInput.tsx";
-import { useModal } from "@/app/dashboard/components/common/useModal.ts";
+import { ClassesTable, ClassTableRow } from "./components/ClassesTable";
+import { Pagination } from "./components/Pagination";
+import { SearchInput } from "./components/SearchInput";
+import { useModal } from "@/app/dashboard/components/common/useModal";
 
 export default function ClassesPage() {
   const {
@@ -45,7 +49,9 @@ export default function ClassesPage() {
     close: closeStudents,
   } = useModal();
 
-  const [currentClass, setCurrentClass] = useState<ClassTableRow | null>(null);
+  const [currentClass, setCurrentClass] = useState<ClassWithStudents | null>(
+    null
+  );
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [localSearch, setLocalSearch] = useState("");
 
@@ -77,20 +83,20 @@ export default function ClassesPage() {
   // -------------------------
   // Modal handlers
   // -------------------------
-  const handleEdit = async (cls: ClassTableRow) => {
+  const handleEdit = async (cls: ClassWithStudents) => {
     selectClass(cls);
     setCurrentClass(cls);
     openEdit();
     await fetchClassById(cls.id);
   };
 
-  const handleDelete = (cls: ClassTableRow) => {
+  const handleDelete = (cls: ClassWithStudents) => {
     setDeleteTargetId(cls.id);
     selectClass(cls);
     openDelete();
   };
 
-  const handleViewStudents = async (cls: ClassTableRow) => {
+  const handleViewStudents = async (cls: ClassWithStudents) => {
     selectClass(cls);
     setCurrentClass(cls);
     openStudents();
@@ -175,7 +181,7 @@ export default function ClassesPage() {
           isOpen={editOpen}
           onClose={() => {
             closeEdit();
-            clearSelectedClass?.();
+            clearSelectedClass();
           }}
           onSuccess={() => fetchClasses(page)}
         />
@@ -186,7 +192,7 @@ export default function ClassesPage() {
           isOpen={deleteOpen}
           onClose={() => {
             closeDelete();
-            clearSelectedClass?.();
+            clearSelectedClass();
             setDeleteTargetId(null);
           }}
           onSuccess={() => fetchClasses(page)}
@@ -199,7 +205,7 @@ export default function ClassesPage() {
           isOpen={studentsOpen}
           onClose={() => {
             closeStudents();
-            clearSelectedClass?.();
+            clearSelectedClass();
             setCurrentClass(null);
           }}
         />

@@ -1,21 +1,16 @@
 "use client";
 
 import React from "react";
-
-export interface ClassTableRow {
-  id: string;
-  name: string;
-  students?: any[];
-}
+import { ClassWithStudents } from "@/app/store/useClassesStore";
 
 interface ClassesTableProps {
-  classes: ClassTableRow[];
-  sortBy: string;
+  classes: ClassWithStudents[];
+  sortBy: "name" | "studentCount";
   sortOrder: "asc" | "desc";
-  onSort: (key: string) => void;
-  onEdit: (cls: ClassTableRow) => void;
-  onDelete: (cls: ClassTableRow) => void;
-  onViewStudents: (cls: ClassTableRow) => void;
+  onSort: (key: "name" | "studentCount") => void;
+  onEdit: (cls: ClassWithStudents) => void;
+  onDelete: (cls: ClassWithStudents) => void;
+  onViewStudents: (cls: ClassWithStudents) => void;
 }
 
 export const ClassesTable: React.FC<ClassesTableProps> = ({
@@ -67,7 +62,7 @@ export const ClassesTable: React.FC<ClassesTableProps> = ({
           {classes.map((cls) => (
             <tr key={cls.id} className="hover:bg-gray-50">
               <td className="px-4 py-2">{cls.name}</td>
-              <td className="px-4 py-2">{cls.students?.length || 0}</td>
+              <td className="px-4 py-2">{cls.students?.length ?? 0}</td>
               <td className="px-4 py-2 flex gap-2 justify-end">
                 <button
                   onClick={() => onEdit(cls)}
