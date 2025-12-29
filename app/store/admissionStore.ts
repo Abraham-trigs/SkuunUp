@@ -272,9 +272,10 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
         const selectedGrade = gradeList.find((g) => g.id === admission.gradeId);
         gradeName = selectedGrade?.name;
       } else {
-        const firstAvailableGrade = gradeList.find((g) => g.enrolled < g.capacity);
-        gradeName = firstAvailableGrade?.name;
-      }
+const firstAvailableGrade = gradeList.find(
+  (g) => (g.Application?.length ?? 0) < (g.capacity ?? 0)
+);
+gradeName = firstAvailableGrade?.name;      }
     }
 
     set({
@@ -355,7 +356,9 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     const gradeList: GradeWithApplications[] = grades || classesStore.classes.flatMap((c) => c.grades);
     if (!gradeList || gradeList.length === 0) return;
 
-    const grade = gradeId ? gradeList.find((g) => g.id === gradeId) : gradeList.find((g) => g.enrolled < g.capacity);
+    const grade = gradeId
+  ? gradeList.find((g) => g.id === gradeId)
+  : gradeList.find((g) => (g.Application?.length ?? 0) < (g.capacity ?? 0));
     if (!grade) return;
 
     set((state) => ({
