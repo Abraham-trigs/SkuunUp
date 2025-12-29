@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 interface Activity {
   id: string;
-  description: string;
+  description: string | null;
   timestamp: string;
 }
 
@@ -25,10 +25,16 @@ export default function RecentActivity({ data }: RecentActivityProps) {
               key={activity.id}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05, type: "spring", stiffness: 300 }}
+              transition={{
+                delay: index * 0.05,
+                type: "spring",
+                stiffness: 300,
+              }}
               className="flex justify-between items-center p-3 bg-white/10 rounded-md hover:bg-white/20 transition-colors cursor-pointer"
             >
-              <p className="text-white text-sm">{activity.description}</p>
+              <p className="text-white text-sm">
+                {activity.description ?? "No description available"}
+              </p>
               <p className="text-white/70 text-xs">
                 {new Date(activity.timestamp).toLocaleString("en-GB", {
                   day: "2-digit",

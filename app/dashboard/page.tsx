@@ -13,13 +13,11 @@ export default async function DashboardPage() {
   const classes = await prisma.class.count();
   const parents = await prisma.user.count({ where: { role: "PARENT" } });
 
-  // Ensure previous counts are valid (>= 0)
   const prevStudents = Math.max(0, students - Math.floor(Math.random() * 5));
   const prevTeachers = Math.max(0, teachers - Math.floor(Math.random() * 2));
   const prevClasses = Math.max(0, classes - Math.floor(Math.random() * 1));
   const prevParents = Math.max(0, parents - Math.floor(Math.random() * 3));
 
-  // Calculate trend % (positive or negative)
   const calcTrend = (current: number, previous: number) =>
     previous === 0 ? 100 : Math.round(((current - previous) / previous) * 100);
 
@@ -29,7 +27,6 @@ export default async function DashboardPage() {
       value: students,
       colorClass:
         "bg-white/10 backdrop-blur-3xl border border-white/90 shadow-xl supports-[backdrop-filter]:bg-[#ffffff]/7 supports-[backdrop-filter]:backdrop-blur-md transition-all duration-300 hover:bg-ford-",
-
       icon: "Users",
       trend: calcTrend(students, prevStudents),
     },
@@ -38,7 +35,6 @@ export default async function DashboardPage() {
       value: teachers,
       colorClass:
         "bg-white/10 backdrop-blur-3xl border border-white/90 shadow-xl supports-[backdrop-filter]:bg-[#ffffff]/7 supports-[backdrop-filter]:backdrop-blur-md transition-all duration-300 hover:bg-ford-",
-
       icon: "User",
       trend: calcTrend(teachers, prevTeachers),
     },
@@ -55,7 +51,6 @@ export default async function DashboardPage() {
       value: parents,
       colorClass:
         "bg-white/10 backdrop-blur-3xl border border-white/90 shadow-2xl supports-[backdrop-filter]:bg-[#ffffff]/7 supports-[backdrop-filter]:backdrop-blur-md transition-all duration-300 hover:bg-",
-
       icon: "Users2",
       trend: calcTrend(parents, prevParents),
     },
@@ -82,20 +77,14 @@ export default async function DashboardPage() {
     ],
   };
 
-  const recentActivityRaw = await prisma.activity.findMany({
+  const recentActivity = await prisma.activity.findMany({
     orderBy: { createdAt: "desc" },
     take: 5,
   });
 
-  const recentActivity = recentActivityRaw.map((a) => ({
-    id: a.id,
-    description: a.description,
-    timestamp: a.createdAt.toISOString(),
-  }));
-
   return (
-    <div className="max-full space-y-6 ml-8 mr-20 ">
-      <div className=" grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-12 ">
+    <div className="max-full space-y-6 ml-8 mr-20">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-12">
         {summary.map((card) => (
           <SummaryCard
             key={card.title}
@@ -114,11 +103,18 @@ export default async function DashboardPage() {
         </ChartCard>
 
         <ChartCard title="Attendance Trend ">
-          <AttendanceTrendChart data={charts.attendanceTrend} ss />
+          <AttendanceTrendChart data={charts.attendanceTrend} />
         </ChartCard>
       </div>
 
-      <RecentActivity data={recentActivity} />
+      {/* Updated RecentActivity usage */}
+      <RecentActivity
+        data={recentActivity.map((a) => ({
+          id: a.id,
+          description: a.description, // can be null
+          timestamp: a.createdAt.toISOString(),
+        }))}
+      />
     </div>
   );
 }
