@@ -6,6 +6,7 @@ import { useModal } from "@/app/dashboard/components/common/useModal";
 import { useExamStore, RichExam } from "@/app/store/examsStore";
 import ExamsFormModal from "./components/ExamsFormModal";
 import ConfirmDeleteExamModal from "./components/ConfirmDeleteExamModal";
+import { Pagination } from "@/app/dashboard/components/common/Pagination";
 
 export default function ExamsPage() {
   const {
@@ -21,11 +22,9 @@ export default function ExamsPage() {
     deleteExam,
   } = useExamStore();
 
-  // Use the hook for modals
   const formModal = useModal<RichExam>();
   const deleteModal = useModal<RichExam>();
 
-  // Reactive fetch: whenever page or search changes
   useEffect(() => {
     fetchExams({ page, search });
   }, [page, search, fetchExams]);
@@ -34,6 +33,7 @@ export default function ExamsPage() {
     if (deleteModal.data?.id) {
       await deleteExam(deleteModal.data.id);
       deleteModal.close();
+      fetchExams({ page, search });
     }
   };
 
@@ -63,7 +63,6 @@ export default function ExamsPage() {
               className="p-4 border rounded shadow-sm bg-white"
             >
               <h3 className="font-bold">{exam.subjectName}</h3>
-
               <div className="text-sm mt-2">
                 <p>Date: {new Date(exam.date).toLocaleDateString()}</p>
                 <p>
@@ -91,7 +90,14 @@ export default function ExamsPage() {
 
       {/* Modals */}
       {formModal.isOpen && (
-        <ExamsFormModal exam={formModal.data} onClose={formModal.close} />
+        <ExamsFormModal
+          exam={formModal.data ?? undefined}
+          studentId="global"
+          onClose={() => {
+            formModal.close();
+            fetchExams({ page, search });
+          }}
+        />
       )}
 
       {deleteModal.isOpen && deleteModal.data && (
@@ -105,18 +111,13 @@ export default function ExamsPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center mt-6 gap-2">
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPage(p)}
-              className={`px-3 py-1 rounded ${
-                p === page ? "bg-blue-600 text-white" : "bg-gray-100"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+        <div className="mt-6">
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPrev={() => setPage(page - 1)}
+            onNext={() => setPage(page + 1)}
+          />
         </div>
       )}
     </div>
