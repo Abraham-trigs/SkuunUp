@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { Dialog } from "@headlessui/react";
 import { X } from "lucide-react";
-import { useExamStore, Exam } from "@/app/store/examsStore.ts";
+import { useExamStore, RichExam } from "@/app/store/examsStore.ts";
 
 interface ExamsFormModalProps {
   isOpen?: boolean;
-  exam?: Exam | null;
+  exam?: RichExam | null;
   studentId: string;
   onClose: () => void;
 }

@@ -1,14 +1,19 @@
 import { create } from "zustand";
 import { Exam } from "@/generated/prisma";
 
-// FIX: Define a type that includes the extra fields returned by your API
+/**
+ * RichExam extends the base Prisma Exam model.
+ * In your schema, the field is 'date', and we add 'subjectName' 
+ * to handle the display of the linked Subject relation.
+ */
 export interface RichExam extends Exam {
-  subject: string; 
-  maxScore: number;
+  subjectName?: string; // For UI display
+  score: number;        // Explicitly number (Prisma Float)
+  maxScore: number;     // Explicitly number (Prisma Float)
 }
 
 interface ExamState {
-  exams: RichExam[]; // Use RichExam instead of Exam
+  exams: RichExam[];
   total: number;
   page: number;
   perPage: number;
@@ -17,8 +22,8 @@ interface ExamState {
   error: string | null;
   search: string;
   fetchExams: (options?: { search?: string; page?: number; perPage?: number; studentId?: string }) => void;
-  createExam: (data: Partial<RichExam>) => Promise<RichExam | null>; // Use RichExam
-  updateExam: (id: string, data: Partial<RichExam>) => Promise<RichExam | null>; // Use RichExam
+  createExam: (data: Partial<RichExam>) => Promise<RichExam | null>;
+  updateExam: (id: string, data: Partial<RichExam>) => Promise<RichExam | null>;
   deleteExam: (id: string) => Promise<boolean>;
   setPage: (page: number) => void;
   setSearch: (search: string) => void;
@@ -66,14 +71,14 @@ export const useExamStore = create<ExamState>((set, get) => {
           if (res.ok) {
             const totalPages = Math.ceil(json.total / currentPerPage);
             set({
-              exams: json.exams, // TypeScript now expects these to match RichExam
+              exams: json.exams,
               total: json.total,
               page: currentPage,
               perPage: currentPerPage,
               totalPages,
             });
           } else {
-            set({ error: json.error });
+            set({ error: json.error || "Failed to fetch exams" });
           }
         } catch (err: any) {
           set({ error: err.message });
