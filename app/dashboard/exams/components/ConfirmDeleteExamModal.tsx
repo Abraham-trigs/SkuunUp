@@ -3,27 +3,34 @@
 import { Dialog } from "@headlessui/react";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useExamStore } from "@/app/store/examsStore.ts";
 
+// 1. Updated interface to include onConfirm
 interface ConfirmDeleteExamModalProps {
   isOpen?: boolean;
   exam: any;
   onClose: () => void;
+  onConfirm: () => Promise<void>;
 }
 
 export default function ConfirmDeleteExamModal({
   isOpen = true,
   exam,
   onClose,
+  onConfirm, // 2. Receive onConfirm as a prop
 }: ConfirmDeleteExamModalProps) {
-  const { deleteExam } = useExamStore();
   const [loading, setLoading] = useState(false);
 
   const handleConfirm = async () => {
     setLoading(true);
-    await deleteExam(exam.id);
-    setLoading(false);
-    onClose(); // close modal after deletion
+    try {
+      // 3. Call the function passed from the parent (page.tsx)
+      await onConfirm();
+      onClose(); // close modal after successful deletion
+    } catch (error) {
+      console.error("Failed to delete exam:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,7 +47,8 @@ export default function ConfirmDeleteExamModal({
         </div>
 
         <p className="text-gray-700">
-          Are you sure you want to delete <strong>{exam.subject}</strong>?
+          Are you sure you want to delete{" "}
+          <strong>{exam?.subject || "this exam"}</strong>?
         </p>
 
         <div className="flex justify-end gap-2 mt-4">
