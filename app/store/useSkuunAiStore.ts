@@ -1,27 +1,33 @@
-// app/store/useSkuunAiStore.ts
-// Purpose: Fully typed Zustand store for SkuunAi sessions, messages, actions, and recommendations
-// Features: streaming, optimistic updates, abort handling, internal AI actions, Zod validation
-
 "use client";
 
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { z } from "zod";
-import type {
+
+import {
   AIActionType,
-  SkuunAiMessage,
-  SkuunAiSession,
-  SkuunAiAction,
-  SkuunAiRecommendation,
   MessageType,
   Role,
-} from "@/lib/types/skuunAiTypes.ts";
-import { determineAutoActions, triggerAutoActions } from "@/lib/skuunAiAutoActions.ts";
-import { skuunAiActionHandlers } from "@/lib/skuunAiActions.ts";
+} from "@/lib/types/skuunAiTypes";
+
+import type {
+  SkuunAiSessionDTO,
+  SkuunAiMessageDTO,
+  SkuunAiActionDTO,
+  SkuunAiRecommendationDTO,
+} from "@/lib/types/skuunAiClientTypes";
+
+import {
+  determineAutoActions,
+  triggerAutoActions,
+} from "@/lib/skuunAiAutoActions";
+
+import { skuunAiActionHandlers } from "@/lib/skuunAiActions";
 
 // -------------------- Zod Validators --------------------
 const messageSchema = z.object({
   id: z.string(),
+  sessionId: z.string(),
   content: z.string(),
   type: z.nativeEnum(MessageType),
   sender: z.enum(["USER", "AI", "SYSTEM"]),
@@ -31,19 +37,22 @@ const messageSchema = z.object({
 
 const actionSchema = z.object({
   id: z.string(),
+  sessionId: z.string(),
   type: z.nativeEnum(AIActionType),
   payload: z.any(),
-  status: z.enum(["PENDING", "EXECUTED"]),
+  status: z.enum(["PENDING", "EXECUTED", "FAILED"]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 
 const recommendationSchema = z.object({
   id: z.string(),
+  sessionId: z.string(),
   category: z.string(),
   message: z.string(),
   data: z.any().optional(),
   targetId: z.string().nullable().optional(),
+  resolved: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -61,7 +70,7 @@ const sessionSchema = z.object({
 
 // -------------------- Store Type --------------------
 interface SkuunAiStore {
-  sessions: SkuunAiSession[];
+  sessions: SkuunAiSessionDTO[];
   total: number;
   page: number;
   perPage: number;
@@ -70,26 +79,37 @@ interface SkuunAiStore {
   activeAbortControllers: Record<string, AbortController>;
 
   fetchSessions: (page?: number, perPage?: number) => Promise<void>;
+
   postMessage: (
     content: string,
     type: MessageType,
     sessionId?: string,
     onChunk?: (chunk: string) => void,
-    onRecommendationChunk?: (rec: SkuunAiRecommendation) => void
+    onRecommendationChunk?: (rec: SkuunAiRecommendationDTO) => void
   ) => Promise<void>;
+
   postAction: (
     type: AIActionType,
     payload: any,
     sessionId: string,
     onChunk?: (chunk: string) => void,
-    onRecommendationChunk?: (rec: SkuunAiRecommendation) => void
+    onRecommendationChunk?: (rec: SkuunAiRecommendationDTO) => void
   ) => Promise<void>;
-  cancelStream: (sessionId: string) => void;
-  triggerInternalActions: (sessionId: string, content: string, role: Role) => Promise<void>;
 
-  addMessageLocally: (sessionId: string, message: SkuunAiMessage) => void;
-  addActionLocally: (sessionId: string, action: SkuunAiAction) => void;
-  addRecommendationLocally: (sessionId: string, recommendation: SkuunAiRecommendation) => void;
+  cancelStream: (sessionId: string) => void;
+
+  triggerInternalActions: (
+    sessionId: string,
+    content: string,
+    role: Role
+  ) => Promise<void>;
+
+  addMessageLocally: (sessionId: string, message: SkuunAiMessageDTO) => void;
+  addActionLocally: (sessionId: string, action: SkuunAiActionDTO) => void;
+  addRecommendationLocally: (
+    sessionId: string,
+    recommendation: SkuunAiRecommendationDTO
+  ) => void;
 }
 
 // -------------------- Store Implementation --------------------
@@ -105,45 +125,63 @@ export const useSkuunAiStore = create<SkuunAiStore>()(
 
     // -------------------- Fetch Sessions --------------------
     fetchSessions: async (page = 1, perPage = 10) => {
-      set((state) => { state.loading = true; state.error = null; });
-      try {
-        const res = await fetch(`/api/skuunAi?page=${page}&perPage=${perPage}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to fetch sessions");
+      set((state) => {
+        state.loading = true;
+        state.error = null;
+      });
 
-        const validatedSessions = z.array(sessionSchema).parse(data.sessions);
+      try {
+        const res = await fetch(
+          `/api/skuunAi?page=${page}&perPage=${perPage}`
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to fetch sessions");
+
+        const sessions = z.array(sessionSchema).parse(data.sessions);
+
         set((state) => {
-          state.sessions = validatedSessions;
+          state.sessions = sessions;
           state.total = data.total;
           state.page = data.page;
           state.perPage = data.perPage;
           state.loading = false;
         });
       } catch (err: any) {
-        set((state) => { state.error = err.message; state.loading = false; });
+        set((state) => {
+          state.error = err.message;
+          state.loading = false;
+        });
       }
     },
 
-    // -------------------- Post User Message with SSE --------------------
-    postMessage: async (content, type, sessionId, onChunk, onRecommendationChunk) => {
+    // -------------------- Post User Message (SSE) --------------------
+    postMessage: async (
+      content,
+      type,
+      sessionId,
+      onChunk,
+      onRecommendationChunk
+    ) => {
       const id = sessionId ?? `temp-${Date.now()}`;
       const abortController = new AbortController();
 
       set((state) => {
         state.activeAbortControllers[id] = abortController;
         state.loading = true;
-        state.error = null;
       });
 
-      const tempMessage: SkuunAiMessage = {
-        id: `temp-${Date.now()}`,
+      const now = new Date().toISOString();
+
+      const tempMessage: SkuunAiMessageDTO = {
+        id: crypto.randomUUID(),
+        sessionId: id,
         content,
         type,
         sender: "USER",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        sessionId: id,
+        createdAt: now,
+        updatedAt: now,
       };
+
       get().addMessageLocally(id, tempMessage);
 
       try {
@@ -156,93 +194,96 @@ export const useSkuunAiStore = create<SkuunAiStore>()(
 
         if (!res.ok) throw new Error("Failed to post message");
 
-        if (res.body) {
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let done = false;
+        if (!res.body) return;
 
-          const aiMessage: SkuunAiMessage = {
-            id: `ai-temp-${Date.now()}`,
-            content: "",
-            type: "TEXT",
-            sender: "AI",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            sessionId: id,
-          };
-          get().addMessageLocally(id, aiMessage);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
 
-          let buffer = "";
-          while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            if (value) {
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split("\n");
-              buffer = lines.pop() ?? "";
+        const aiMessage: SkuunAiMessageDTO = {
+          id: crypto.randomUUID(),
+          sessionId: id,
+          content: "",
+          type: MessageType.TEXT,
+          sender: "AI",
+          createdAt: now,
+          updatedAt: now,
+        };
 
-              for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                  const rec: SkuunAiRecommendation = JSON.parse(line);
-                  if (rec?.id && rec?.category) {
-                    get().addRecommendationLocally(id, rec);
-                    onRecommendationChunk?.(rec);
-                  } else {
-                    onChunk?.(line);
-                    set((state) => {
-                      const sIdx = state.sessions.findIndex((s) => s.id === id);
-                      if (sIdx > -1) {
-                        const mIdx = state.sessions[sIdx].messages.findIndex((m) => m.id === aiMessage.id);
-                        if (mIdx > -1) state.sessions[sIdx].messages[mIdx].content += line;
-                      }
-                    });
-                  }
-                } catch {
-                  onChunk?.(line);
-                  set((state) => {
-                    const sIdx = state.sessions.findIndex((s) => s.id === id);
-                    if (sIdx > -1) {
-                      const mIdx = state.sessions[sIdx].messages.findIndex((m) => m.id === aiMessage.id);
-                      if (mIdx > -1) state.sessions[sIdx].messages[mIdx].content += line;
-                    }
-                  });
-                }
+        get().addMessageLocally(id, aiMessage);
+
+        let buffer = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            try {
+              const rec = JSON.parse(line) as SkuunAiRecommendationDTO;
+              if (rec?.id && rec?.category) {
+                get().addRecommendationLocally(id, rec);
+                onRecommendationChunk?.(rec);
+                continue;
               }
-            }
-            done = readerDone;
+            } catch {}
+
+            onChunk?.(line);
+            set((state) => {
+              const s = state.sessions.find((s) => s.id === id);
+              const m = s?.messages.find((m) => m.id === aiMessage.id);
+              if (m) m.content += line;
+            });
           }
         }
 
-        await get().triggerInternalActions(id, content, "USER" as Role);
-        set((state) => { state.loading = false; });
+        await get().triggerInternalActions(id, content, "USER");
       } catch (err: any) {
-        if (err.name === "AbortError") console.log("Stream cancelled:", id);
-        else set((state) => { state.error = err.message });
-        set((state) => { state.loading = false; });
+        if (err.name !== "AbortError") {
+          set((state) => {
+            state.error = err.message;
+          });
+        }
       } finally {
-        set((state) => { delete state.activeAbortControllers[id]; });
+        set((state) => {
+          state.loading = false;
+          delete state.activeAbortControllers[id];
+        });
       }
     },
 
-    // -------------------- Post Direct AI Action with SSE --------------------
-    postAction: async (type, payload, sessionId, onChunk, onRecommendationChunk) => {
+    // -------------------- Post Action (SSE) --------------------
+    postAction: async (
+      type,
+      payload,
+      sessionId,
+      onChunk,
+      onRecommendationChunk
+    ) => {
       const abortController = new AbortController();
       set((state) => {
         state.activeAbortControllers[sessionId] = abortController;
         state.loading = true;
-        state.error = null;
       });
 
-      const tempActionMessage: SkuunAiMessage = {
-        id: `action-temp-${Date.now()}`,
-        content: `Triggering AI Action: ${type}`,
-        type: "TEXT",
-        sender: "SYSTEM",
-        createdAt: new Date(),
-        updatedAt: new Date(),
+      const now = new Date().toISOString();
+
+      const systemMessage: SkuunAiMessageDTO = {
+        id: crypto.randomUUID(),
         sessionId,
+        content: `Triggering AI Action: ${type}`,
+        type: MessageType.TEXT,
+        sender: "SYSTEM",
+        createdAt: now,
+        updatedAt: now,
       };
-      get().addMessageLocally(sessionId, tempActionMessage);
+
+      get().addMessageLocally(sessionId, systemMessage);
 
       try {
         const res = await fetch("/api/skuunAi/action", {
@@ -254,142 +295,120 @@ export const useSkuunAiStore = create<SkuunAiStore>()(
 
         if (!res.ok) throw new Error("Failed to post action");
 
-        if (res.body) {
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let done = false;
-          const aiMessage: SkuunAiMessage = {
-            id: `ai-action-temp-${Date.now()}`,
-            content: "",
-            type: "TEXT",
-            sender: "AI",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            sessionId,
-          };
-          get().addMessageLocally(sessionId, aiMessage);
+        if (!res.body) return;
 
-          let buffer = "";
-          while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            if (value) {
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split("\n");
-              buffer = lines.pop() ?? "";
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
 
-              for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                  const rec: SkuunAiRecommendation = JSON.parse(line);
-                  if (rec?.id && rec?.category) {
-                    get().addRecommendationLocally(sessionId, rec);
-                    onRecommendationChunk?.(rec);
-                  } else {
-                    onChunk?.(line);
-                    set((state) => {
-                      const sIdx = state.sessions.findIndex((s) => s.id === sessionId);
-                      if (sIdx > -1) {
-                        const mIdx = state.sessions[sIdx].messages.findIndex((m) => m.id === aiMessage.id);
-                        if (mIdx > -1) state.sessions[sIdx].messages[mIdx].content += line;
-                      }
-                    });
-                  }
-                } catch {
-                  onChunk?.(line);
-                  set((state) => {
-                    const sIdx = state.sessions.findIndex((s) => s.id === sessionId);
-                    if (sIdx > -1) {
-                      const mIdx = state.sessions[sIdx].messages.findIndex((m) => m.id === aiMessage.id);
-                      if (mIdx > -1) state.sessions[sIdx].messages[mIdx].content += line;
-                    }
-                  });
-                }
+        const aiMessage: SkuunAiMessageDTO = {
+          id: crypto.randomUUID(),
+          sessionId,
+          content: "",
+          type: MessageType.TEXT,
+          sender: "AI",
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        get().addMessageLocally(sessionId, aiMessage);
+
+        let buffer = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            try {
+              const rec = JSON.parse(line) as SkuunAiRecommendationDTO;
+              if (rec?.id && rec?.category) {
+                get().addRecommendationLocally(sessionId, rec);
+                onRecommendationChunk?.(rec);
+                continue;
               }
-            }
-            done = readerDone;
+            } catch {}
+
+            onChunk?.(line);
+            set((state) => {
+              const s = state.sessions.find((s) => s.id === sessionId);
+              const m = s?.messages.find((m) => m.id === aiMessage.id);
+              if (m) m.content += line;
+            });
           }
         }
-
-        set((state) => { state.loading = false; });
-      } catch (err: any) {
-        if (err.name === "AbortError") console.log("Action stream cancelled:", sessionId);
-        else set((state) => { state.error = err.message });
-        set((state) => { state.loading = false; });
       } finally {
-        set((state) => { delete state.activeAbortControllers[sessionId]; });
+        set((state) => {
+          state.loading = false;
+          delete state.activeAbortControllers[sessionId];
+        });
       }
     },
 
-    // -------------------- Cancel Streaming --------------------
+    // -------------------- Cancel Stream --------------------
     cancelStream: (sessionId) => {
-      const controller = get().activeAbortControllers[sessionId];
-      if (controller) controller.abort();
+      get().activeAbortControllers[sessionId]?.abort();
     },
 
-    // -------------------- Internal AI Action Triggers --------------------
+    // -------------------- Internal AI Actions --------------------
     triggerInternalActions: async (sessionId, content, role) => {
-      try {
-        const actions = determineAutoActions(content, role);
-        if (!actions.length) return;
+      const actions = determineAutoActions(content, role);
+      if (!actions.length) return;
 
-        await triggerAutoActions(sessionId, actions, { message: content });
+      await triggerAutoActions(sessionId, actions, { message: content });
 
-        for (const actionType of actions) {
-          const handler = skuunAiActionHandlers[actionType];
-          if (!handler) continue;
+      const now = new Date().toISOString();
 
-          const recommendations = await handler({ message: content });
-          recommendations.forEach((rec) => {
-            const newRec: SkuunAiRecommendation = {
-              id: crypto.randomUUID(),
-              sessionId,
-              category: rec.category,
-              message: rec.message,
-              data: rec.data,
-              targetId: (rec.data as any)?.studentId || null,
-              resolved: false,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
-            get().addRecommendationLocally(sessionId, newRec);
-          });
+      for (const actionType of actions) {
+        const handler = skuunAiActionHandlers[actionType];
+        if (!handler) continue;
 
-          const newAction: SkuunAiAction = {
+        const recs = await handler({ message: content });
+        recs.forEach((rec) =>
+          get().addRecommendationLocally(sessionId, {
             id: crypto.randomUUID(),
             sessionId,
-            type: actionType,
-            payload: { message: content },
-            status: "EXECUTED",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          get().addActionLocally(sessionId, newAction);
-        }
-      } catch (err) {
-        console.error("Failed internal actions:", err);
+            category: rec.category,
+            message: rec.message,
+            data: rec.data,
+            targetId: (rec.data as any)?.studentId ?? null,
+            resolved: false,
+            createdAt: now,
+            updatedAt: now,
+          })
+        );
+
+        get().addActionLocally(sessionId, {
+          id: crypto.randomUUID(),
+          sessionId,
+          type: actionType,
+          payload: { message: content },
+          status: "EXECUTED",
+          createdAt: now,
+          updatedAt: now,
+        });
       }
     },
 
-    // -------------------- Local State Updaters --------------------
+    // -------------------- Local Mutators --------------------
     addMessageLocally: (sessionId, message) => {
-      set((state) => {
-        const idx = state.sessions.findIndex((s) => s.id === sessionId);
-        if (idx > -1) state.sessions[idx].messages.push(message);
-      });
+      const s = get().sessions.find((s) => s.id === sessionId);
+      s?.messages.push(message);
     },
 
     addActionLocally: (sessionId, action) => {
-      set((state) => {
-        const idx = state.sessions.findIndex((s) => s.id === sessionId);
-        if (idx > -1) state.sessions[idx].actions.push(action);
-      });
+      const s = get().sessions.find((s) => s.id === sessionId);
+      s?.actions.push(action);
     },
 
     addRecommendationLocally: (sessionId, recommendation) => {
-      set((state) => {
-        const idx = state.sessions.findIndex((s) => s.id === sessionId);
-        if (idx > -1) state.sessions[idx].SkuunAiRecommendation.push(recommendation);
-      });
+      const s = get().sessions.find((s) => s.id === sessionId);
+      s?.SkuunAiRecommendation.push(recommendation);
     },
   }))
 );

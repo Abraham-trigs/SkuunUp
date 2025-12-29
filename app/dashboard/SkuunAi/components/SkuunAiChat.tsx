@@ -4,25 +4,26 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useSkuunAiStore } from "@/app/store/useSkuunAiStore";
+import type { SkuunAiMessageDTO } from "@/lib/types/skuunAiClientTypes";
 import {
-  useSkuunAiStore,
-  SkuunAiMessage,
-} from "@/app/store/useSkuunAiStore.ts";
-import { AIActionType } from "@/lib/types/skuunAiTypes.ts";
+  AIActionType,
+  MessageType,
+  SenderType,
+} from "@/lib/types/skuunAiTypes";
 
 // ----------------------- UI Components -----------------------
 
-// Individual chat message bubble
-function MessageBubble({ message }: { message: SkuunAiMessage }) {
-  const isUser = message.sender === "USER";
-  const isAIAction = message.sender === "SYSTEM";
+function MessageBubble({ message }: { message: SkuunAiMessageDTO }) {
+  const isUser = message.sender === SenderType.USER;
+  const isSystem = message.sender === SenderType.SYSTEM;
 
   return (
     <div
       className={`max-w-[70%] p-3 my-1 rounded-xl break-words ${
         isUser
           ? "bg-blue-500 text-white self-end"
-          : isAIAction
+          : isSystem
           ? "bg-purple-200 text-black self-start italic"
           : "bg-gray-200 text-black self-start"
       }`}
@@ -32,11 +33,10 @@ function MessageBubble({ message }: { message: SkuunAiMessage }) {
   );
 }
 
-// Recommendation display item
 function RecommendationItem({
   message,
 }: {
-  message: { category: string; message: string; id?: string };
+  message: { id?: string; category: string; message: string };
 }) {
   return (
     <div className="p-2 border rounded-md my-1 bg-yellow-50 text-sm">
@@ -45,7 +45,6 @@ function RecommendationItem({
   );
 }
 
-// AI action buttons
 function AIActionButtons({
   onTrigger,
   disabled,
@@ -53,7 +52,7 @@ function AIActionButtons({
   onTrigger: (type: AIActionType) => void;
   disabled?: boolean;
 }) {
-  const actions: { label: string; type: AIActionType }[] = [
+  const actions = [
     { label: "Predict Attendance", type: AIActionType.PREDICT_ATTENDANCE },
     { label: "Flag Special Needs", type: AIActionType.FLAG_SPECIAL_NEEDS },
     { label: "Financial Insights", type: AIActionType.FINANCIAL_INSIGHTS },
@@ -65,10 +64,10 @@ function AIActionButtons({
       {actions.map((action) => (
         <button
           key={action.type}
-          className={`bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 text-sm ${
+          onClick={() => !disabled && onTrigger(action.type)}
+          className={`bg-green-500 text-white px-2 py-1 rounded text-sm hover:bg-green-600 ${
             disabled ? "opacity-50 cursor-not-allowed" : ""
           }`}
-          onClick={() => !disabled && onTrigger(action.type)}
         >
           {action.label}
         </button>
@@ -77,7 +76,8 @@ function AIActionButtons({
   );
 }
 
-// ----------------------- Main Chat Component -----------------------
+// ----------------------- Main Component -----------------------
+
 export default function SkuunAiChat() {
   const {
     sessions,
@@ -93,25 +93,22 @@ export default function SkuunAiChat() {
   const [inputValue, setInputValue] = useState("");
   const [streamingMessage, setStreamingMessage] = useState("");
   const [streamingRecs, setStreamingRecs] = useState<any[]>([]);
-  const [rollbackBuffer, setRollbackBuffer] = useState<SkuunAiMessage[]>([]);
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const streamingAbortRef = useRef<AbortController | null>(null);
 
-  const isStreaming = !!streamingAbortRef.current;
+  const isStreaming = Boolean(streamingAbortRef.current);
 
-  // Fetch all sessions on mount
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
 
-  // Auto-select latest session if none active
   useEffect(() => {
     if (!activeSessionId && sessions.length) {
       setActiveSessionId(sessions[sessions.length - 1].id);
     }
   }, [sessions, activeSessionId]);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [sessions, activeSessionId, streamingMessage, streamingRecs]);
@@ -119,19 +116,20 @@ export default function SkuunAiChat() {
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
   // ----------------------- Handlers -----------------------
+
   const handleSend = async () => {
     if (!inputValue.trim() || !activeSessionId || isStreaming) return;
 
-    const previousMessages = activeSession?.messages || [];
-    setRollbackBuffer(previousMessages);
-
-    const tempMessage: SkuunAiMessage = {
+    const tempMessage = {
       id: `temp-${Date.now()}`,
+      sessionId: activeSessionId,
       content: inputValue,
-      type: "TEXT",
-      sender: "USER",
+      type: MessageType.TEXT,
+      sender: SenderType.USER,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
+
     addMessageLocally(activeSessionId, tempMessage);
 
     setInputValue("");
@@ -141,25 +139,12 @@ export default function SkuunAiChat() {
 
     try {
       await postMessage(
-        inputValue,
-        "TEXT",
+        tempMessage.content,
+        MessageType.TEXT,
         activeSessionId,
         (chunk) => setStreamingMessage((prev) => prev + chunk),
         (rec) => setStreamingRecs((prev) => [...prev, rec])
       );
-
-      if (streamingMessage) {
-        addMessageLocally(activeSessionId, {
-          id: `ai-${Date.now()}`,
-          content: streamingMessage,
-          type: "TEXT",
-          sender: "AI",
-          createdAt: new Date().toISOString(),
-        });
-      }
-    } catch (err) {
-      addMessageLocally(activeSessionId, rollbackBuffer);
-      console.error("Message streaming failed", err);
     } finally {
       setStreamingMessage("");
       setStreamingRecs([]);
@@ -170,17 +155,17 @@ export default function SkuunAiChat() {
   const handleActionTrigger = async (type: AIActionType) => {
     if (!activeSessionId || isStreaming) return;
 
-    const previousMessages = activeSession?.messages || [];
-    setRollbackBuffer(previousMessages);
-
-    const tempActionMessage: SkuunAiMessage = {
+    const tempSystemMessage = {
       id: `action-temp-${Date.now()}`,
+      sessionId: activeSessionId,
       content: `Triggering AI Action: ${type}`,
-      type: "TEXT",
-      sender: "SYSTEM",
+      type: MessageType.TEXT,
+      sender: SenderType.SYSTEM,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-    addMessageLocally(activeSessionId, tempActionMessage);
+
+    addMessageLocally(activeSessionId, tempSystemMessage);
 
     setStreamingMessage("");
     setStreamingRecs([]);
@@ -194,19 +179,6 @@ export default function SkuunAiChat() {
         (chunk) => setStreamingMessage((prev) => prev + chunk),
         (rec) => setStreamingRecs((prev) => [...prev, rec])
       );
-
-      if (streamingMessage) {
-        addMessageLocally(activeSessionId, {
-          id: `ai-action-${Date.now()}`,
-          content: streamingMessage,
-          type: "TEXT",
-          sender: "AI",
-          createdAt: new Date().toISOString(),
-        });
-      }
-    } catch (err) {
-      addMessageLocally(activeSessionId, rollbackBuffer);
-      console.error("AI action streaming failed", err);
     } finally {
       setStreamingMessage("");
       setStreamingRecs([]);
@@ -214,22 +186,17 @@ export default function SkuunAiChat() {
     }
   };
 
-  const handleCancelStreaming = () => {
-    streamingAbortRef.current?.abort();
-    setStreamingMessage("");
-    setStreamingRecs([]);
-  };
-
   // ----------------------- Render -----------------------
+
   return (
     <div className="flex flex-col h-full max-h-[80vh] w-full md:w-3/4 lg:w-2/3 mx-auto border rounded-lg shadow-md bg-white">
-      {/* Sessions List */}
+      {/* Sessions */}
       <div className="flex border-b overflow-x-auto">
         {sessions.map((session) => (
           <button
             key={session.id}
             onClick={() => setActiveSessionId(session.id)}
-            className={`flex-none p-2 text-center border-r last:border-r-0 ${
+            className={`flex-none p-2 border-r last:border-r-0 ${
               session.id === activeSessionId ? "bg-blue-100 font-bold" : ""
             }`}
           >
@@ -238,7 +205,6 @@ export default function SkuunAiChat() {
         ))}
       </div>
 
-      {/* AI Action Buttons */}
       {activeSessionId && (
         <AIActionButtons
           onTrigger={handleActionTrigger}
@@ -246,33 +212,25 @@ export default function SkuunAiChat() {
         />
       )}
 
-      {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col">
-        {loading && <div className="text-center text-gray-500">Loading...</div>}
-        {error && <div className="text-red-500 text-center">{error}</div>}
+        {loading && <div className="text-center text-gray-500">Loading…</div>}
+        {error && <div className="text-center text-red-500">{error}</div>}
 
         {activeSession ? (
           <>
-            {/* User / AI messages */}
             {activeSession.messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
 
-            {/* Streaming AI message with typing indicator */}
             {streamingMessage && (
-              <div className="max-w-[70%] p-3 my-1 rounded-xl break-words bg-gray-100 text-gray-700 italic self-start flex items-center gap-2 animate-pulse">
-                <span>{streamingMessage}</span>
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-bounce" />
+              <div className="max-w-[70%] p-3 my-1 rounded-xl break-words bg-gray-100 text-gray-700 italic self-start animate-pulse">
+                {streamingMessage}
               </div>
             )}
 
-            {/* Recommendations */}
             {activeSession.SkuunAiRecommendation.concat(streamingRecs).map(
               (rec) => (
-                <RecommendationItem
-                  key={rec.id || `rec-${Date.now()}`}
-                  message={rec}
-                />
+                <RecommendationItem key={rec.id} message={rec} />
               )
             )}
 
@@ -285,23 +243,20 @@ export default function SkuunAiChat() {
         )}
       </div>
 
-      {/* Input Box */}
       <div className="border-t p-3 flex gap-2">
         <input
           type="text"
-          className={`flex-1 border rounded-md p-2 focus:outline-none focus:ring focus:ring-blue-200 ${
-            isStreaming ? "opacity-50 cursor-not-allowed" : ""
-          }`}
+          className="flex-1 border rounded-md p-2 focus:outline-none focus:ring focus:ring-blue-200"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Type your message..."
-          disabled={isStreaming}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          disabled={isStreaming}
+          placeholder="Type your message…"
         />
         <button
-          className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleSend}
           disabled={isStreaming}
+          className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:opacity-50"
         >
           Send
         </button>
