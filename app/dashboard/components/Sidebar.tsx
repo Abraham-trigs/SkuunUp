@@ -15,7 +15,7 @@ import {
   Archive,
 } from "lucide-react";
 import { useSidebarStore } from "./store/sideBarStore.ts";
-import { useUserStore } from "@/app/store/useUserStore.ts";
+import { useAuthStore } from "@/app/store/useAuthStore.ts"; // Switched to AuthStore
 import { useMemo, useEffect, useState } from "react";
 import { useDebounce } from "@/app/hooks/useDebounce.ts";
 
@@ -94,11 +94,19 @@ export default function Sidebar() {
   const hydrated = useSidebarStore((state) => state.hydrated);
   const setActiveItem = useSidebarStore((state) => state.setActiveItem);
   const activeItem = useSidebarStore((state) => state.activeItem);
-  const user = useUserStore((state) => state.user);
+
+  // FIX: Access authenticated user session
+  const user = useAuthStore((state) => state.user);
+  const getUserInitials = useAuthStore((state) => state.getUserInitials);
+  const getUserFullName = useAuthStore((state) => state.getUserFullName);
+
   const role: Role = (user?.role as Role) || "ADMIN";
 
   const allowedItems = useMemo(
-    () => menuItems.filter((item) => rolePermissions[role].includes(item.key)),
+    () =>
+      menuItems.filter(
+        (item) => rolePermissions[role]?.includes(item.key) || false
+      ),
     [role]
   );
 
@@ -110,7 +118,6 @@ export default function Sidebar() {
 
     const normalizedPath = debouncedPath.replace(/\/+$/, "");
 
-    // sort by href length descending to match longest paths first
     const matched = [...allowedItems]
       .sort((a, b) => b.href.length - a.href.length)
       .find((item) => {
@@ -145,7 +152,7 @@ export default function Sidebar() {
       {/* Header */}
       <div className="flex items-center justify-center flex-shrink-0 py-4 px-3 border-b border-ark-cyan">
         <span className="text-xl font-bold truncate text-white">
-          {hovered ? "SkuunUp" : "SU"}
+          {hovered ? user?.school?.name || "SkuunUp" : "SU"}
         </span>
       </div>
 
@@ -164,35 +171,44 @@ export default function Sidebar() {
                   ? "bg-ark-cyan text-ark-navy"
                   : "bg-transparent text-ark-lightblue"
               )}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.classList.add("bg-ark-deepblue");
-                  e.currentTarget.classList.remove("bg-transparent");
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.classList.remove("bg-ark-deepblue");
-                  e.currentTarget.classList.add("bg-transparent");
-                }
-              }}
               title={!hovered ? item.label : undefined}
             >
               <item.icon
                 className={clsx(
-                  "w-5 h-5",
+                  "w-5 h-5 flex-shrink-0",
                   isActive ? "text-ark-navy" : "text-ark-lightblue"
                 )}
               />
-              {hovered && <span>{item.label}</span>}
+              {hovered && (
+                <span className="text-sm font-medium">{item.label}</span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="p-3 flex items-center justify-center flex-shrink-0 border-t border-ark-cyan">
-        <span className="text-xs text-white/70">{user?.role?.[0] || "U"}</span>
+      {/* Footer / User Profile */}
+      <div className="p-3 border-t border-ark-cyan bg-ark-navy/50">
+        <div
+          className={clsx(
+            "flex items-center gap-3",
+            !hovered && "justify-center"
+          )}
+        >
+          <div className="h-8 w-8 rounded-full bg-ark-cyan flex items-center justify-center font-bold text-ark-navy text-xs flex-shrink-0">
+            {getUserInitials()}
+          </div>
+          {hovered && (
+            <div className="flex flex-col min-w-0 overflow-hidden">
+              <span className="text-xs font-semibold text-white truncate">
+                {getUserFullName()}
+              </span>
+              <span className="text-[10px] text-ark-lightblue/70 uppercase">
+                {role}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </motion.aside>
   );
