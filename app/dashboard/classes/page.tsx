@@ -1,22 +1,20 @@
-// app/dashboard/classes/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
 import {
   useClassesStore,
   ClassWithStudents,
-} from "@/app/store/useClassesStore";
-import { StudentListItem } from "@/app/store/useStudentStore";
+} from "@/app/store/useClassesStore.ts";
 
-import AddClassModal from "./components/AddClassModal";
-import EditClassModal from "./components/EditClassModal";
-import DeleteClassModal from "./components/DeleteClassModal";
-import StudentsModal from "./components/StudentsModal";
+import AddClassModal from "./components/AddClassModal.tsx";
+import EditClassModal from "./components/EditClassModal.tsx";
+import DeleteClassModal from "./components/DeleteClassModal.tsx";
+import StudentsModal from "./components/StudentsModal.tsx";
 
-import { ClassesTable, ClassTableRow } from "./components/ClassesTable";
-import { Pagination } from "./components/Pagination";
-import { SearchInput } from "./components/SearchInput";
-import { useModal } from "@/app/dashboard/components/common/useModal";
+import { ClassesTable } from "./components/ClassesTable.tsx";
+import { Pagination } from "@/app/dashboard/classes/components/Pagination.tsx";
+import { SearchInput } from "@/app/dashboard/classes/components/SearchInput.tsx";
+import { useModal } from "@/app/dashboard/components/common/useModal.ts";
 
 export default function ClassesPage() {
   const {
@@ -73,7 +71,7 @@ export default function ClassesPage() {
   // -------------------------
   // Sorting
   // -------------------------
-  const toggleSort = (key: "name" | "studentCount") => {
+  const toggleSort = (key: "name" | "createdAt" | "studentCount") => {
     const order = sortBy === key && sortOrder === "asc" ? "desc" : "asc";
     setSort(key, order);
   };
@@ -151,7 +149,7 @@ export default function ClassesPage() {
         <>
           <ClassesTable
             classes={classes}
-            sortBy={sortBy}
+            sortBy={sortBy as "name" | "createdAt" | "studentCount"}
             sortOrder={sortOrder}
             onSort={toggleSort}
             onEdit={handleEdit}
@@ -173,7 +171,7 @@ export default function ClassesPage() {
         <AddClassModal
           isOpen={addOpen}
           onClose={closeAdd}
-          onSuccess={() => fetchClasses(page)}
+          onSuccess={async () => await fetchClasses(page)}
         />
       )}
       {editOpen && selectedClass && (
@@ -181,9 +179,9 @@ export default function ClassesPage() {
           isOpen={editOpen}
           onClose={() => {
             closeEdit();
-            clearSelectedClass();
+            clearSelectedClass?.();
           }}
-          onSuccess={() => fetchClasses(page)}
+          onSuccess={async () => await fetchClasses(page)}
         />
       )}
       {deleteOpen && deleteTargetId && selectedClass && (
@@ -192,10 +190,10 @@ export default function ClassesPage() {
           isOpen={deleteOpen}
           onClose={() => {
             closeDelete();
-            clearSelectedClass();
+            clearSelectedClass?.();
             setDeleteTargetId(null);
           }}
-          onSuccess={() => fetchClasses(page)}
+          onSuccess={async () => await fetchClasses(page)}
         />
       )}
       {studentsOpen && currentClass && selectedClass && (
@@ -205,7 +203,7 @@ export default function ClassesPage() {
           isOpen={studentsOpen}
           onClose={() => {
             closeStudents();
-            clearSelectedClass();
+            clearSelectedClass?.();
             setCurrentClass(null);
           }}
         />

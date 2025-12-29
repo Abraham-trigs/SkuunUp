@@ -9,13 +9,18 @@ import { useClassesStore } from "@/app/store/useClassesStore.ts";
 interface AddClassModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void | Promise<void>; // ✅ Added this
 }
 
 const classSchema = z.object({
   name: z.string().min(1, "Class name is required"),
 });
 
-export default function AddClassModal({ isOpen, onClose }: AddClassModalProps) {
+export default function AddClassModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: AddClassModalProps) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -31,7 +36,6 @@ export default function AddClassModal({ isOpen, onClose }: AddClassModalProps) {
 
     const parsed = classSchema.safeParse({ name });
     if (!parsed.success) {
-      // FIXED: Changed .errors to .issues to resolve TypeScript build error
       setError(parsed.error.issues.map((e) => e.message).join(", "));
       setLoading(false);
       return;
@@ -51,6 +55,10 @@ export default function AddClassModal({ isOpen, onClose }: AddClassModalProps) {
         `Class "${name}" created successfully with grades: A, B, C!`
       );
       setName("");
+
+      // ✅ Call the onSuccess callback if provided
+      if (onSuccess) await onSuccess();
+
       onClose();
     } catch (err) {
       console.error(err);

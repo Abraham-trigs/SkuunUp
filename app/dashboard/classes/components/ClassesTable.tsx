@@ -3,14 +3,16 @@
 import React from "react";
 import { ClassWithStudents } from "@/app/store/useClassesStore";
 
+export interface ClassTableRow extends ClassWithStudents {}
+
 interface ClassesTableProps {
-  classes: ClassWithStudents[];
-  sortBy: "name" | "studentCount";
+  classes: ClassTableRow[];
+  sortBy: "name" | "createdAt" | "studentCount";
   sortOrder: "asc" | "desc";
-  onSort: (key: "name" | "studentCount") => void;
-  onEdit: (cls: ClassWithStudents) => void;
-  onDelete: (cls: ClassWithStudents) => void;
-  onViewStudents: (cls: ClassWithStudents) => void;
+  onSort: (key: "name" | "createdAt" | "studentCount") => void;
+  onEdit: (cls: ClassTableRow) => void;
+  onDelete: (cls: ClassTableRow) => void;
+  onViewStudents: (cls: ClassTableRow) => void;
 }
 
 export const ClassesTable: React.FC<ClassesTableProps> = ({
@@ -53,6 +55,21 @@ export const ClassesTable: React.FC<ClassesTableProps> = ({
                 </span>
               </div>
             </th>
+            <th
+              className="px-6 py-4 cursor-pointer"
+              onClick={() => onSort("createdAt")}
+            >
+              <div className="flex items-center gap-2 text-xs font-black uppercase text-[#BFCDEF]">
+                Created At
+                <span className="text-[#6BE8EF]">
+                  {sortBy === "createdAt"
+                    ? sortOrder === "asc"
+                      ? "↑"
+                      : "↓"
+                    : "↕"}
+                </span>
+              </div>
+            </th>
             <th className="px-6 py-4 text-right text-xs font-black uppercase text-[#BFCDEF]">
               Actions
             </th>
@@ -62,7 +79,10 @@ export const ClassesTable: React.FC<ClassesTableProps> = ({
           {classes.map((cls) => (
             <tr key={cls.id} className="hover:bg-gray-50">
               <td className="px-4 py-2">{cls.name}</td>
-              <td className="px-4 py-2">{cls.students?.length ?? 0}</td>
+              <td className="px-4 py-2">{cls.students?.length || 0}</td>
+              <td className="px-4 py-2">
+                {new Date(cls.createdAt).toLocaleDateString()}
+              </td>
               <td className="px-4 py-2 flex gap-2 justify-end">
                 <button
                   onClick={() => onEdit(cls)}
