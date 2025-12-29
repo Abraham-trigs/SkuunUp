@@ -96,9 +96,9 @@ interface AdmissionStore {
   deleteAdmission: (applicationId: string) => Promise<boolean>;
   loadStudentData: (admission: any) => void;
 
-  optimisticUpdate: <T>(
-    field: keyof AdmissionFormData,
-    updateFn: (prev: T) => T,
+  optimisticUpdate: <K extends keyof AdmissionFormData>(
+    field: K,
+    updateFn: (prev: AdmissionFormData[K]) => AdmissionFormData[K],
     apiCall?: () => Promise<void>
   ) => void;
 
@@ -154,7 +154,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     const prev = get().formData[field];
 
     set((state) => {
-      const updated = updateFn(prev);
+      const updated = updateFn(prev as any);
       return {
         formData: {
           ...state.formData,
