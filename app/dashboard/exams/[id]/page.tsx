@@ -17,10 +17,10 @@ export default function StudentExamsPage() {
     loading,
     error,
     page,
-    perPage, // Changed from limit
+    perPage,
     search,
     fetchExams,
-    // Ensure these exist in your store or add them (see below)
+
     setPage,
     setSearch,
     deleteExam,

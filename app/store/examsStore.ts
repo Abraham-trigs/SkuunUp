@@ -1,21 +1,27 @@
 import { create } from "zustand";
 import { Exam } from "@/generated/prisma";
 
+// FIX: Define a type that includes the extra fields returned by your API
+export interface RichExam extends Exam {
+  subject: string; 
+  maxScore: number;
+}
+
 interface ExamState {
-  exams: Exam[];
+  exams: RichExam[]; // Use RichExam instead of Exam
   total: number;
   page: number;
   perPage: number;
   totalPages: number;
   loading: boolean;
   error: string | null;
-  search: string; // Added
+  search: string;
   fetchExams: (options?: { search?: string; page?: number; perPage?: number; studentId?: string }) => void;
-  createExam: (data: Partial<Exam>) => Promise<Exam | null>;
-  updateExam: (id: string, data: Partial<Exam>) => Promise<Exam | null>;
+  createExam: (data: Partial<RichExam>) => Promise<RichExam | null>; // Use RichExam
+  updateExam: (id: string, data: Partial<RichExam>) => Promise<RichExam | null>; // Use RichExam
   deleteExam: (id: string) => Promise<boolean>;
-  setPage: (page: number) => void; // Added
-  setSearch: (search: string) => void; // Added
+  setPage: (page: number) => void;
+  setSearch: (search: string) => void;
   reset: () => void;
 }
 
@@ -35,14 +41,12 @@ export const useExamStore = create<ExamState>((set, get) => {
     totalPages: 0,
     loading: false,
     error: null,
-    search: "", // Initialize
+    search: "",
 
-    // Actions for state management
     setPage: (page: number) => set({ page }),
     setSearch: (search: string) => set({ search }),
 
     fetchExams: ({ search, page, perPage, studentId } = {}) => {
-      // Use provided options or fall back to current store state
       const currentSearch = search !== undefined ? search : get().search;
       const currentPage = page !== undefined ? page : get().page;
       const currentPerPage = perPage !== undefined ? perPage : get().perPage;
@@ -62,7 +66,7 @@ export const useExamStore = create<ExamState>((set, get) => {
           if (res.ok) {
             const totalPages = Math.ceil(json.total / currentPerPage);
             set({
-              exams: json.exams,
+              exams: json.exams, // TypeScript now expects these to match RichExam
               total: json.total,
               page: currentPage,
               perPage: currentPerPage,
