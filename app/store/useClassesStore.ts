@@ -146,19 +146,20 @@ export const useClassesStore = create<ClassesStore>((set, get) => ({
     }
   },
 
-  fetchStudents: async (classId) => {
-    set({ loading: true });
-    try {
-      const studentStore = useStudentStore.getState();
-      await studentStore.fetchStudents(1, 50, "");
-      set({
-        students: studentStore.students.filter((s) => s.classId === classId),
-        loading: false,
-      });
-    } catch (err: any) {
-      set({ error: err.response?.data?.error || err.message, loading: false });
-    }
-  },
+ fetchStudents: async (classId) => {
+  set({ loading: true });
+  try {
+    const studentStore = useStudentStore.getState();
+    await studentStore.fetchStudents(); 
+    set({
+      students: studentStore.students.filter((s) => s.classId === classId),
+      loading: false,
+    });
+  } catch (err: any) {
+    set({ error: err.response?.data?.error || err.message, loading: false });
+  }
+},
+
 
   fetchAttendance: async (classId, date) => {
     set({ loading: true });
