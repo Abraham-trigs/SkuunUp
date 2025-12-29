@@ -17,7 +17,7 @@ const formatTimestamp = (ts: string) =>
 
 export default function Topbar() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, getUserInitials } = useAuthStore();
   const { isOpen: sidebarOpen } = useSidebarStore();
   const {
     notifications,
@@ -50,21 +50,14 @@ export default function Topbar() {
         transition: "left 0.3s ease, width 0.3s ease",
       });
     };
-
     updateStyle();
     window.addEventListener("resize", updateStyle);
     return () => window.removeEventListener("resize", updateStyle);
   }, [sidebarOpen]);
 
   // ---------------- Identity (UI-only) ----------------
-  const firstName = user?.firstName ?? "";
-  const middleName = user?.middleName ?? "";
-  const surname = user?.surname ?? "";
-
-  const initials =
-    firstName || surname
-      ? `${firstName[0] ?? ""}${surname[0] ?? ""}`.toUpperCase()
-      : "A";
+  const initials = getUserInitials();
+  const firstName = user?.firstName ?? "Account";
 
   // ---------------- Logout ----------------
   const handleLogout = async () => {
@@ -80,26 +73,54 @@ export default function Topbar() {
 
   // ---------------- Outside click / ESC ----------------
   useEffect(() => {
-    const handler = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent && e.key !== "Escape") return;
+    const handleClickOrEsc = (e: MouseEvent | KeyboardEvent) => {
+      const target = (e as MouseEvent).target as Node | null;
+      const isOutsideProfile =
+        profileRef.current && !profileRef.current.contains(target);
+      const isOutsideNotif =
+        notifRef.current && !notifRef.current.contains(target);
+      const isEscapeKey = e instanceof KeyboardEvent && e.key === "Escape";
 
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(e.target as Node) &&
-        notifRef.current &&
-        !notifRef.current.contains(e.target as Node)
-      ) {
-        closeAll();
-      }
+      if (isEscapeKey || (isOutsideProfile && isOutsideNotif)) closeAll();
     };
-
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", handler);
+    document.addEventListener("mousedown", handleClickOrEsc);
+    document.addEventListener("keydown", handleClickOrEsc);
     return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", handler);
+      document.removeEventListener("mousedown", handleClickOrEsc);
+      document.removeEventListener("keydown", handleClickOrEsc);
     };
   }, [closeAll]);
+
+  // ---------------- Render helpers ----------------
+  const renderNotification = (n: (typeof notifications)[0]) => (
+    <div
+      key={n.id}
+      onClick={() => markAsRead(n.id)}
+      className={clsx(
+        "px-4 py-2 flex justify-between cursor-pointer",
+        !n.read && "bg-gray-200 font-semibold"
+      )}
+    >
+      <span className="text-sm">{n.message}</span>
+      <span className="text-xs text-gray-500">
+        {formatTimestamp(n.timestamp)}
+      </span>
+    </div>
+  );
+
+  const renderProfileOption = (
+    label: string,
+    onClick: () => void,
+    icon?: React.ReactNode // Changed from JSX.Element
+  ) => (
+    <button
+      className="w-full flex items-center gap-2 px-4 py-2 hover:bg-ford-secondary text-left"
+      onClick={onClick}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 
   return (
     <header
@@ -145,21 +166,7 @@ export default function Topbar() {
             {notifications.length === 0 ? (
               <p className="p-4 text-sm text-gray-400">No notifications</p>
             ) : (
-              notifications.map((n) => (
-                <div
-                  key={n.id}
-                  onClick={() => markAsRead(n.id)}
-                  className={clsx(
-                    "px-4 py-2 flex justify-between cursor-pointer",
-                    !n.read && "bg-gray-200 font-semibold"
-                  )}
-                >
-                  <span className="text-sm">{n.message}</span>
-                  <span className="text-xs text-gray-500">
-                    {formatTimestamp(n.timestamp)}
-                  </span>
-                </div>
-              ))
+              notifications.map(renderNotification)
             )}
           </div>
         </div>
@@ -172,16 +179,12 @@ export default function Topbar() {
             aria-haspopup="menu"
             aria-expanded={profileOpen}
           >
-            {/* Initials: mobile only */}
             <div className="md:hidden w-8 h-8 bg-ford-secondary text-ford-primary rounded-full flex items-center justify-center text-sm font-semibold">
               {initials}
             </div>
-
-            {/* First name: md+ only */}
             <span className="hidden md:inline text-ford-secondary font-medium whitespace-nowrap">
-              {firstName || "Account"}
+              {firstName}
             </span>
-
             <ChevronDown
               className={clsx(
                 "w-4 h-4 text-ford-secondary transition-transform",
@@ -199,19 +202,12 @@ export default function Topbar() {
             )}
             role="menu"
           >
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-ford-secondary"
-              onClick={() => router.push("/profile")}
-            >
-              Profile
-            </button>
-            <button
-              className="w-full flex items-center gap-2 px-4 py-2 hover:bg-ford-secondary"
-              onClick={handleLogout}
-            >
+            {renderProfileOption("Profile", () => router.push("/profile"))}
+            {renderProfileOption(
+              "Logout",
+              handleLogout,
               <LogOut className="w-4 h-4" />
-              Logout
-            </button>
+            )}
           </div>
         </div>
       </div>
