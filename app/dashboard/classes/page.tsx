@@ -12,7 +12,7 @@ import DeleteClassModal from "./components/DeleteClassModal.tsx";
 import StudentsModal from "./components/StudentsModal.tsx";
 
 import { ClassesTable } from "./components/ClassesTable.tsx";
-import { Pagination } from "@/app/dashboard/classes/components/Pagination.tsx";
+import { Pagination } from "@/app/dashboard/components/common/Pagination.tsx";
 import { SearchInput } from "@/app/dashboard/classes/components/SearchInput.tsx";
 import { useModal } from "@/app/dashboard/components/common/useModal.ts";
 

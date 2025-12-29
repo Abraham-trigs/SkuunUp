@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Loader2, Plus, Search, Calendar } from "lucide-react";
 import ExamsFormModal from "../components/ExamsFormModal.tsx";
 import ConfirmDeleteExamModal from "../components/ConfirmDeleteExamModal.tsx";
 import { useExamStore, RichExam } from "@/app/store/examsStore.ts";
+import { useModal } from "@/app/dashboard/components/common/useModal";
+import { Pagination } from "@/app/dashboard/components/common/Pagination";
 
 export default function StudentExamsPage() {
   const { id: studentId } = useParams();
@@ -24,29 +26,31 @@ export default function StudentExamsPage() {
     deleteExam,
   } = useExamStore();
 
-  // Use the RichExam type for the selected exam state
-  const [selectedExam, setSelectedExam] = useState<RichExam | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  // Reusable modal hooks
+  const formModal = useModal<RichExam>();
+  const deleteModal = useModal<RichExam>();
 
+  // Fetch exams on mount / studentId change
   useEffect(() => {
     fetchExams({ studentId: studentId as string });
   }, [studentId, fetchExams]);
 
-  const handleDelete = async (examId: string) => {
-    await deleteExam(examId);
-    setIsDeleteOpen(false);
+  const handleDelete = async () => {
+    if (!deleteModal.data) return;
+    await deleteExam(deleteModal.data.id);
+    deleteModal.close();
     fetchExams({ studentId: studentId as string, page });
   };
 
   const handleSearchChange = (value: string) => {
-    if (setSearch) setSearch(value);
-    if (setPage) setPage(1);
+    setSearch(value);
+    setPage(1);
     fetchExams({ studentId: studentId as string, search: value, page: 1 });
   };
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
+      {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Student Exams</h1>
@@ -55,17 +59,14 @@ export default function StudentExamsPage() {
           </p>
         </div>
         <button
-          onClick={() => {
-            setSelectedExam(null);
-            setIsModalOpen(true);
-          }}
+          onClick={() => formModal.open()}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
         >
           <Plus size={18} /> Add Exam Record
         </button>
       </header>
 
-      {/* Filter Bar */}
+      {/* Filter */}
       <div className="relative">
         <Search
           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -102,7 +103,6 @@ export default function StudentExamsPage() {
               className="bg-white p-5 border border-gray-200 shadow-sm rounded-xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:border-blue-300 transition-colors"
             >
               <div className="space-y-1">
-                {/* FIX: Use subjectName to match updated RichExam type */}
                 <h3 className="font-bold text-lg text-gray-900">
                   {exam.subjectName || "Unknown Subject"}
                 </h3>
@@ -118,19 +118,13 @@ export default function StudentExamsPage() {
               </div>
               <div className="flex gap-2 sm:self-center">
                 <button
-                  onClick={() => {
-                    setSelectedExam(exam);
-                    setIsModalOpen(true);
-                  }}
+                  onClick={() => formModal.open(exam)}
                   className="flex-1 sm:flex-none px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors text-sm font-medium"
                 >
                   Edit
                 </button>
                 <button
-                  onClick={() => {
-                    setSelectedExam(exam);
-                    setIsDeleteOpen(true);
-                  }}
+                  onClick={() => deleteModal.open(exam)}
                   className="flex-1 sm:flex-none px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-100 transition-colors text-sm font-medium"
                 >
                   Delete
@@ -141,59 +135,43 @@ export default function StudentExamsPage() {
         </div>
       )}
 
-      {/* Pagination Footer */}
+      {/* Pagination */}
       {exams.length > 0 && (
-        <footer className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-100 text-sm">
-          <p className="text-gray-500">
-            Showing page{" "}
-            <span className="font-semibold text-gray-900">{page}</span> of{" "}
-            <span className="font-semibold text-gray-900">
-              {Math.ceil(total / perPage)}
-            </span>
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => {
-                if (setPage) setPage(page - 1);
-                fetchExams({ studentId: studentId as string, page: page - 1 });
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all font-medium text-gray-700"
-            >
-              Previous
-            </button>
-            <button
-              disabled={page * perPage >= total}
-              onClick={() => {
-                if (setPage) setPage(page + 1);
-                fetchExams({ studentId: studentId as string, page: page + 1 });
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all font-medium text-gray-700"
-            >
-              Next
-            </button>
-          </div>
-        </footer>
+        <Pagination
+          page={page}
+          totalPages={Math.ceil(total / perPage)}
+          onPrev={() => {
+            if (page > 1) {
+              setPage(page - 1);
+              fetchExams({ studentId: studentId as string, page: page - 1 });
+            }
+          }}
+          onNext={() => {
+            if (page * perPage < total) {
+              setPage(page + 1);
+              fetchExams({ studentId: studentId as string, page: page + 1 });
+            }
+          }}
+        />
       )}
 
       {/* Modals */}
-      {isModalOpen && (
+      {formModal.isOpen && (
         <ExamsFormModal
-          exam={selectedExam}
+          exam={formModal.data ?? undefined}
           studentId={studentId as string}
           onClose={() => {
-            setSelectedExam(null);
-            setIsModalOpen(false);
+            formModal.close();
             fetchExams({ studentId: studentId as string, page });
           }}
         />
       )}
 
-      {isDeleteOpen && selectedExam && (
+      {deleteModal.isOpen && deleteModal.data && (
         <ConfirmDeleteExamModal
-          exam={selectedExam}
-          onClose={() => setIsDeleteOpen(false)}
-          onConfirm={() => handleDelete(selectedExam.id)}
+          exam={deleteModal.data}
+          onClose={deleteModal.close}
+          onConfirm={handleDelete}
         />
       )}
     </div>
