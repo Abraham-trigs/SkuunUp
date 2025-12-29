@@ -1,10 +1,8 @@
-// app/students/components/AssignClassGradeButton.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useClassesStore } from "@/app/store/useClassesStore.ts";
-import { useAdmissionStore } from "@/app/store/admissionStore.ts";
-import { GradeWithApplications } from "@/app/store/useClassesStore.ts";
+import { useAdmissionStore, GradeOption } from "@/app/store/admissionStore.ts";
 
 interface AssignClassGradeButtonProps {
   studentId: string;
@@ -20,7 +18,7 @@ export default function AssignClassGradeButton({
   onAssigned,
 }: AssignClassGradeButtonProps) {
   const { classes, fetchClasses } = useClassesStore();
-  const { setClass, selectGrade } = useAdmissionStore();
+  const { setClass, selectGrade, gradesForSelectedClass } = useAdmissionStore();
 
   const [selectedClassId, setSelectedClassId] = useState(currentClassId || "");
   const [selectedGradeId, setSelectedGradeId] = useState(currentGradeId || "");
@@ -38,26 +36,21 @@ export default function AssignClassGradeButton({
       return;
     }
 
-    const cls = classes.find((c) => c.id === selectedClassId);
-    const availableGrade = cls?.grades?.find((g) => g.enrolled < g.capacity);
+    const availableGrade = gradesForSelectedClass.find(
+      (g) => g.enrolled < g.capacity
+    );
     setSelectedGradeId(availableGrade?.id || "");
-  }, [selectedClassId, classes]);
+  }, [selectedClassId, gradesForSelectedClass]);
 
   const handleAssign = async () => {
     if (!selectedClassId || !selectedGradeId) return;
 
     const cls = classes.find((c) => c.id === selectedClassId);
-    if (!cls || !cls.grades) return;
+    if (!cls) return;
 
-    // Automatically pick the grade object based on selectedGradeId
-    const grade = cls.grades.find(
-      (g: GradeWithApplications) => g.id === selectedGradeId
-    );
-    if (!grade) return;
-
-    // Update admission store
-    setClass(cls.id, cls.grades); // sets selected class and available grades
-    selectGrade(grade.id, cls.grades); // sets selected grade
+    // Update admission store using gradesForSelectedClass
+    setClass(cls.id, cls.grades as any); // `as any` because store accepts GradeWithApplications[]
+    selectGrade(selectedGradeId, cls.grades as any);
 
     if (onAssigned) await onAssigned();
 
@@ -105,13 +98,11 @@ export default function AssignClassGradeButton({
                 disabled={!selectedClassId}
               >
                 <option value="">Select Grade</option>
-                {classes
-                  .find((c) => c.id === selectedClassId)
-                  ?.grades?.map((g: GradeWithApplications) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name} (Enrolled: {g.enrolled}/{g.capacity})
-                    </option>
-                  ))}
+                {gradesForSelectedClass.map((g: GradeOption) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} (Enrolled: {g.enrolled}/{g.capacity})
+                  </option>
+                ))}
               </select>
             </div>
 
