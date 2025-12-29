@@ -1,46 +1,26 @@
 // app/admission/components/Step7FeesDeclaration.tsx
-// Purpose: Step 7 of the admission form — captures fees acknowledgment, declaration, and allows selection of class & grade.
+// Purpose: Step 7 of the admission form — fees acknowledgment, declaration, class & grade selection.
 
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useAdmissionStore } from "@/app/store/admissionStore.ts";
 import { useClassesStore } from "@/app/store/useClassesStore.ts";
 import LabeledInput from "./LabeledInput.tsx";
-import { Class } from "@/generated/prisma";
-// Extend Class type to include grades
-interface ClassWithGrades extends Class {
-  grades: { id: string; name: string; capacity: number; enrolled: number }[];
-}
 
 export default function StepFeesDeclaration() {
-  const { formData, setField, setClass, selectGrade } = useAdmissionStore();
+  const { formData, setField, setClass, selectGrade, gradesForSelectedClass } =
+    useAdmissionStore();
   const { classes, fetchClasses } = useClassesStore();
 
-  const [gradesForClass, setGradesForClass] = useState<
-    ClassWithGrades["grades"]
-  >([]);
-
-  // Fetch classes on mount if not already loaded
+  // Fetch classes if not already loaded
   useEffect(() => {
     if (!classes || classes.length === 0) fetchClasses();
   }, [classes, fetchClasses]);
 
-  // Update grades dropdown when class changes
-  useEffect(() => {
-    if (!formData.classId) {
-      setGradesForClass([]);
-      return;
-    }
-    const selectedClass = classes.find(
-      (c) => c.id === formData.classId
-    ) as ClassWithGrades;
-    setGradesForClass(selectedClass?.grades || []);
-  }, [formData.classId, classes]);
-
   const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const classId = e.target.value;
-    setClass(classId, []); // pass empty array instead of undefined
+    setClass(classId); // store handles grades automatically
   };
 
   const handleGradeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -69,7 +49,7 @@ export default function StepFeesDeclaration() {
         <span>Declaration Signed</span>
       </label>
 
-      {/* Signature Input */}
+      {/* Signature */}
       <LabeledInput
         label="Signature"
         value={formData.signature || ""}
@@ -103,12 +83,12 @@ export default function StepFeesDeclaration() {
           value={formData.gradeId || ""}
           onChange={handleGradeChange}
           className="border px-3 py-2 rounded w-full sm:w-64"
-          disabled={!formData.classId || gradesForClass.length === 0}
+          disabled={!formData.classId || gradesForSelectedClass.length === 0}
         >
           <option value="" disabled>
             Select grade
           </option>
-          {gradesForClass.map((g) => (
+          {gradesForSelectedClass.map((g) => (
             <option key={g.id} value={g.id}>
               {g.name} (Enrolled: {g.enrolled}/{g.capacity})
             </option>

@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import { z } from "zod";
 import { useAuthStore } from "./useAuthStore.ts";
-import { useClassesStore } from "./useClassesStore.ts";
+import { useClassesStore, GradeWithApplications } from "./useClassesStore.ts";
 import {
   StepSchemas,
   FamilyMemberSchema,
@@ -27,9 +27,7 @@ export type GradeOption = {
 };
 
 export const admissionFormSchema = z.object({
-
   schoolDomain: z.string().optional().default(""),
-
   applicationId: z.string().optional(),
   studentId: z.string().optional(),
   progress: z.number().default(0),
@@ -88,6 +86,8 @@ interface AdmissionStore {
   errors: Record<string, string[]>;
   userCreated: boolean;
 
+  gradesForSelectedClass: GradeOption[];
+
   setField: (field: keyof AdmissionFormData, value: any) => void;
   setErrors: (errors: Record<string, string[]>) => void;
 
@@ -107,8 +107,8 @@ interface AdmissionStore {
   addPreviousSchool: (school: PreviousSchool) => void;
   removePreviousSchool: (idx: number) => void;
 
-  setClass: (classId: string, grades: GradeOption[]) => void;
-  selectGrade: (gradeId?: string, grades?: GradeOption[]) => void;
+  setClass: (classId: string, grades?: GradeWithApplications[]) => void;
+  selectGrade: (gradeId?: string, grades?: GradeWithApplications[]) => void;
 }
 
 // ---------------------- Normalize Step Data ----------------------
@@ -139,6 +139,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
   loading: false,
   errors: {},
   userCreated: false,
+  gradesForSelectedClass: [],
 
   setField: (field, value) =>
     set((state) => {
@@ -149,23 +150,28 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
 
   setErrors: (errors) => set({ errors }),
 
-  // ---------------------- Universal Optimistic Update ----------------------
   optimisticUpdate: (field, updateFn, apiCall) => {
     const prev = get().formData[field];
 
-    // Optimistic update
     set((state) => {
       const updated = updateFn(prev);
       return {
-        formData: { ...state.formData, [field]: updated, progress: calculateProgress({ ...state.formData, [field]: updated }) },
+        formData: {
+          ...state.formData,
+          [field]: updated,
+          progress: calculateProgress({ ...state.formData, [field]: updated }),
+        },
       };
     });
 
-    // Rollback if API fails
     if (apiCall) {
       apiCall().catch((err: any) => {
         set((state) => ({
-          formData: { ...state.formData, [field]: prev, progress: calculateProgress({ ...state.formData, [field]: prev }) },
+          formData: {
+            ...state.formData,
+            [field]: prev,
+            progress: calculateProgress({ ...state.formData, [field]: prev }),
+          },
           errors: { [field]: [err?.message || "Update failed"] },
         }));
       });
@@ -207,9 +213,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
 
       return true;
     } catch (err: any) {
-      set({
-        errors: { completeStep: [err?.message || "Step update failed"] },
-      });
+      set({ errors: { completeStep: [err?.message || "Step update failed"] } });
       return false;
     } finally {
       set({ loading: false });
@@ -242,7 +246,7 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     set({ loading: true, errors: {} });
     try {
       await updateAdmissionClient(applicationId, undefined, undefined, false, false, "DELETE");
-      set({ formData: admissionFormSchema.parse({}), userCreated: false });
+      set({ formData: admissionFormSchema.parse({}), userCreated: false, gradesForSelectedClass: [] });
       return true;
     } catch (err: any) {
       set({ errors: { deleteAdmission: [err.message || "Delete failed"] } });
@@ -273,7 +277,10 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
       }
     }
 
-    set({ formData: { ...admission, className, gradeName, progress: calculateProgress(admission) }, userCreated: true });
+    set({
+      formData: { ...admission, className, gradeName, progress: calculateProgress(admission) },
+      userCreated: true,
+    });
   },
 
   addFamilyMember: (member) => {
@@ -308,38 +315,47 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     );
   },
 
-  setClass: (classId, grades) => {
+  setClass: (classId: string, grades?: GradeWithApplications[]) => {
     const classesStore = useClassesStore.getState();
     const selectedClass = classesStore.classes.find(c => c.id === classId);
-    if (!selectedClass) return;
 
-    const gradeList = grades || selectedClass.grades || [];
-    const grade = gradeList.find(g => g.enrolled < g.capacity);
+    if (!selectedClass) {
+      set((state) => ({
+        formData: { ...state.formData, classId: "", className: "", gradeId: "", gradeName: "", progress: calculateProgress({ ...state.formData }) },
+        gradesForSelectedClass: [],
+      }));
+      return;
+    }
+
+    const gradeList: GradeWithApplications[] = grades || selectedClass.grades || [];
+    const grade = gradeList.find(g => (g.capacity ?? 0) > (g.Application?.length ?? 0));
+
+    const mappedGrades: GradeOption[] = gradeList.map((g) => ({
+      id: g.id,
+      name: g.name,
+      capacity: g.capacity ?? 0,
+      enrolled: g.Application?.length ?? 0,
+    }));
 
     set((state) => ({
       formData: {
         ...state.formData,
         classId,
         className: selectedClass.name,
-        gradeId: grade?.id,
-        gradeName: grade?.name,
-        progress: calculateProgress({
-          ...state.formData,
-          classId,
-          className: selectedClass.name,
-          gradeId: grade?.id,
-          gradeName: grade?.name,
-        }),
+        gradeId: grade?.id || "",
+        gradeName: grade?.name || "",
+        progress: calculateProgress({ ...state.formData, classId, className: selectedClass.name, gradeId: grade?.id || "", gradeName: grade?.name || "" }),
       },
+      gradesForSelectedClass: mappedGrades,
     }));
   },
 
   selectGrade: (gradeId, grades) => {
     const classesStore = useClassesStore.getState();
-    const gradeList = grades || classesStore.classes.flatMap(c => c.grades);
+    const gradeList: GradeWithApplications[] = grades || classesStore.classes.flatMap((c) => c.grades);
     if (!gradeList || gradeList.length === 0) return;
 
-    const grade = gradeId ? gradeList.find(g => g.id === gradeId) : gradeList.find((g) => g.enrolled < g.capacity);
+    const grade = gradeId ? gradeList.find((g) => g.id === gradeId) : gradeList.find((g) => g.enrolled < g.capacity);
     if (!grade) return;
 
     set((state) => ({
@@ -352,39 +368,3 @@ export const useAdmissionStore = create<AdmissionStore>((set, get) => ({
     }));
   },
 }));
-
-/* -------------------------------------------------------------------------- */
-/*                             Design Reasoning                               */
-/* -------------------------------------------------------------------------- */
-/*
-- Fully decoupled from direct axios usage.
-- All API interactions are centralized through `updateAdmissionClient`.
-- Optimistic updates preserve UX while rolling back on failure.
-*/
-
-/* -------------------------------------------------------------------------- */
-/*                                Structure                                   */
-/* -------------------------------------------------------------------------- */
-/*
-- `completeStep` handles both Step 0 creation and subsequent updates.
-- `fetchAdmission` retrieves full admission data and enriches with class/grade names.
-- Family and PreviousSchool manipulations use optimistic updates with API sync.
-*/
-
-/* -------------------------------------------------------------------------- */
-/*                        Implementation Guidance                             */
-/* -------------------------------------------------------------------------- */
-/*
-- `updateAdmissionClient` should be kept up-to-date with API changes.
-- Always normalize step data before sending to prevent schema errors.
-- Error handling surfaces field-level messages where possible.
-*/
-
-/* -------------------------------------------------------------------------- */
-/*                           Scalability Insight                              */
-/* -------------------------------------------------------------------------- */
-/*
-- Centralized client helper allows easy switching to different HTTP libraries.
-- Store is fully typed and extendable to additional admission steps.
-- Optimistic pattern supports offline/fast UI updates safely.
-*/
