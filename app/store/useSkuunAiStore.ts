@@ -12,6 +12,7 @@ import {
   SkuunAiAction,
   SkuunAiRecommendation,
 } from "@/lib/types/skuunAiTypes";
+import {SkuunAiMessageDTO , SkuunAiRecommendationDTO, } from "@/lib/types/skuunAiClientTypes";
 
 import {
   determineAutoActions,

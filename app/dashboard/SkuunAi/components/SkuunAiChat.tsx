@@ -10,11 +10,14 @@ import {
   AIActionType,
   MessageType,
   SenderType,
+  SkuunAiMessage,
 } from "@/lib/types/skuunAiTypes";
+
+const now = new Date();
 
 // ----------------------- UI Components -----------------------
 
-function MessageBubble({ message }: { message: SkuunAiMessageDTO }) {
+function MessageBubble({ message }: { message: SkuunAiMessage }) {
   const isUser = message.sender === SenderType.USER;
   const isSystem = message.sender === SenderType.SYSTEM;
 
@@ -120,14 +123,14 @@ export default function SkuunAiChat() {
   const handleSend = async () => {
     if (!inputValue.trim() || !activeSessionId || isStreaming) return;
 
-    const tempMessage = {
+    const tempMessage: SkuunAiMessage = {
       id: `temp-${Date.now()}`,
       sessionId: activeSessionId,
       content: inputValue,
       type: MessageType.TEXT,
       sender: SenderType.USER,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     addMessageLocally(activeSessionId, tempMessage);
@@ -155,14 +158,14 @@ export default function SkuunAiChat() {
   const handleActionTrigger = async (type: AIActionType) => {
     if (!activeSessionId || isStreaming) return;
 
-    const tempSystemMessage = {
+    const tempSystemMessage: SkuunAiMessage = {
       id: `action-temp-${Date.now()}`,
       sessionId: activeSessionId,
       content: `Triggering AI Action: ${type}`,
       type: MessageType.TEXT,
       sender: SenderType.SYSTEM,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     addMessageLocally(activeSessionId, tempSystemMessage);
