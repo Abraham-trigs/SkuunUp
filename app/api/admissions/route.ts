@@ -2,7 +2,7 @@
 // Purpose: Handle Step 0 of student admission (create user, student, application)
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db.ts";
+import { prisma, Prisma } from "@/lib/db.ts";
 import { SchoolAccount } from "@/lib/schoolAccount.ts";
 import { StepSchemas } from "@/lib/helpers/admission.ts";
 import { z } from "zod";
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     if (stepIndex !== 0)
       return NextResponse.json({ error: "POST is only allowed for Step 0" }, { status: 400 });
 
-    // Validate body with Zod schema for Step 0 using .issue
+    // Validate body with Zod schema for Step 0 using .issues
     let validatedData;
     try {
       validatedData = StepSchemas[0].parse(body);
@@ -36,22 +36,19 @@ export async function POST(req: NextRequest) {
       throw err;
     }
 
+    // Type assertion for Prisma UserCreateInput
+    const userData: Prisma.UserCreateInput = {
+      ...validatedData,
+      role: "STUDENT",
+      schoolId: schoolAccount.schoolId,
+    };
+
     // Transaction: create user, student, and application
     const admission = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          ...validatedData,
-          role: "STUDENT",
-          schoolId: schoolAccount.schoolId,
-        },
-      });
+      const user = await tx.user.create({ data: userData });
 
       const student = await tx.student.create({
-        data: {
-          userId: user.id,
-          schoolId: schoolAccount.schoolId,
-          enrolledAt: new Date(),
-        },
+        data: { userId: user.id, schoolId: schoolAccount.schoolId, enrolledAt: new Date() },
       });
 
       const app = await tx.application.create({
@@ -79,6 +76,7 @@ export async function POST(req: NextRequest) {
 Design reasoning:
 - Uses argument-free SchoolAccount.init() for auth and school scoping
 - Validates Step 0 input using Zod .issues for structured error reporting
+- Type-safe Prisma input ensures required fields exist at compile time
 - Transaction ensures user, student, and application are created atomically
 
 Structure:
