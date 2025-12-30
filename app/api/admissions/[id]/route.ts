@@ -10,15 +10,17 @@ import { StepSchemas, calculateProgress } from "@/lib/helpers/admission.ts";
 // -------------------- GET /:id --------------------
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const application = await prisma.application.findFirst({
-      where: { id: params.id, schoolId: schoolAccount.schoolId },
+      where: { id, schoolId: schoolAccount.schoolId },
       include: { student: true, user: true },
     });
 
@@ -35,8 +37,10 @@ export async function GET(
 // -------------------- PUT /:id --------------------
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
@@ -55,13 +59,13 @@ export async function PUT(
 
     const updated = await prisma.$transaction(async (tx) => {
       const existing = await tx.application.findFirst({
-        where: { id: params.id, schoolId: schoolAccount.schoolId },
+        where: { id, schoolId: schoolAccount.schoolId },
       });
 
       if (!existing) throw new Error("Application not found");
 
       return tx.application.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           ...validated,
           progress: calculateProgress({ ...existing, ...validated }),
@@ -83,15 +87,17 @@ export async function PUT(
 // -------------------- DELETE /:id --------------------
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   try {
     const schoolAccount = await SchoolAccount.init();
     if (!schoolAccount)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     await prisma.application.deleteMany({
-      where: { id: params.id, schoolId: schoolAccount.schoolId },
+      where: { id, schoolId: schoolAccount.schoolId },
     });
 
     return NextResponse.json({ success: true }, { status: 200 });
