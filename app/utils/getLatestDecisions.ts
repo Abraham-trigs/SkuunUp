@@ -1,6 +1,6 @@
 // utils/getLatestDecisions.ts
 
-import type { DecisionRecord } from "@prisma/client";
+import type { DecisionRecord } from "@/generated/prisma";
 
 // Flatten nested graph but keep only the latest for each chain
 export function getLatestDecisions(

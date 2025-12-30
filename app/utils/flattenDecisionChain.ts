@@ -1,6 +1,6 @@
 // utils/flattenDecisionChain.ts
 
-import type { DecisionRecord } from "@prisma/client";
+import type { DecisionRecord } from "@/generated/prisma";
 
 // Recursive helper to flatten nested supersedes/supersededBy
 export function flattenDecisionChain(
